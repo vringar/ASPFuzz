@@ -46,7 +46,7 @@
             rnix-lsp
             git
             libgit2
-            python311Packages.libfdt
+            python310Packages.libfdt
             pixman
             zlib
             ninja
