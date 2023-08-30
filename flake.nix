@@ -44,6 +44,15 @@
             # rustdoc, rustfmt, and other tools.
             rustToolchain
             rnix-lsp
+            git
+            libgit2
+            python311Packages.libfdt
+            pixman
+            zlib
+            ninja
+            gcc-arm-embedded
+            nettle
+            cargo-make
           ]) ++ pkgs.lib.optionals pkgs.stdenv.isDarwin (with pkgs; [ libiconv ]);
         };
       });
