@@ -1,6 +1,4 @@
 [submodule "LibAFL"]
 	path = LibAFL
 	url = git@github.com:vringar/LibAFL.git
-[submodule "qemu-libafl-asp"]
-	path = qemu-libafl-asp
-	url = git@git.tu-berlin.de:niklas.jacob/asp-qemu.git
+	branch = main

@@ -3,7 +3,7 @@
 
   # Flake inputs
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs"; # also valid: "nixpkgs"
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable"; # also valid: "nixpkgs"
     rust-overlay.url = "github:oxalica/rust-overlay"; # A helper for Rust + Nix
   };
 
@@ -51,12 +51,11 @@
             libgit2
             ninja
             nettle
-            python310Packages.libfdt
-            python310
+            python311Packages.libfdt
+            python311
             pkg-config
             pixman
             qemu
-            rnix-lsp
             xorg.libX11
             zlib
             zsh
