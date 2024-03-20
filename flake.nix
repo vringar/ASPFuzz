@@ -1,5 +1,5 @@
 {
-  description = "Example Rust development environment for Zero to Nix";
+  description = "A reproducible development environment for ASPFuzz";
 
   # Flake inputs
   inputs = {
@@ -43,16 +43,23 @@
             # The package provided by our custom overlay. Includes cargo, Clippy, cargo-fmt,
             # rustdoc, rustfmt, and other tools.
             rustToolchain
-            rnix-lsp
+            cargo-make
+            glib
+            libgcrypt
+            gcc-arm-embedded
             git
             libgit2
-            python310Packages.libfdt
-            pixman
-            zlib
             ninja
-            gcc-arm-embedded
             nettle
-            cargo-make
+            python310Packages.libfdt
+            python310
+            pkg-config
+            pixman
+            qemu
+            rnix-lsp
+            xorg.libX11
+            zlib
+            zsh
           ]) ++ pkgs.lib.optionals pkgs.stdenv.isDarwin (with pkgs; [ libiconv ]);
         };
       });
