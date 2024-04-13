@@ -10,6 +10,9 @@ edition = "2021"
 libafl = { path = "../LibAFL/libafl/", default-features = false, features = [
     "prelude",
 ] }
+libafl_bolts = { path = "../LibAFL/libafl_bolts/", default-features = false, features = [
+    "prelude",
+] }
 libafl_qemu = { path = "../LibAFL/libafl_qemu/", features = [
     "arm",
     "systemmode",
@@ -17,5 +20,5 @@ libafl_qemu = { path = "../LibAFL/libafl_qemu/", features = [
 serde = { version = "1.0", default-features = false, features = [
     "alloc",
 ] } # serialization lib
-yaml-rust = "0.4"
+yaml-rust = "0.4.5"
 log = "0.4"

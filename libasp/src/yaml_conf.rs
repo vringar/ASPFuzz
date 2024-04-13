@@ -7,37 +7,11 @@ use std::fs::File;
 use std::io::Read;
 use std::str::FromStr;
 use std::fmt::{Result, Formatter, Debug};
-
+use std::cell::OnceCell;
 extern crate yaml_rust;
 use yaml_rust::YamlLoader;
 
-static mut CONF: YAMLConfig = YAMLConfig {
-    config_file:                    String::new(),
-    qemu_zen:                       String::new(),
-    qemu_sram_size:                 0,
-    qemu_on_chip_bl_path:           String::new(),
-    flash_start_smn:                0,
-    flash_size:                     0,
-    flash_start_cpu:                0,
-    flash_base:                     String::new(),
-    input_initial:                  vec![],
-    input_mem:                      vec![],
-    input_fixed:                    vec![],
-    input_total_size:               0,
-    harness_start:                  0,
-    harness_sinks:                  vec![],
-    tunnels_cmps:                   vec![],
-    crashes_breakpoints:            vec![],
-    crashes_mmap_no_exec:           vec![],
-    crashes_mmap_flash_read_fn:     0,
-    crashes_mmap_no_write_flash_fn: vec![],
-    crashes_mmap_no_write_hooks:    vec![],
-    snapshot_default:               ResetLevel::Lazy,
-    snapshot_on_crash:              ResetLevel::Lazy,
-    snapshot_periodically:          ResetLevel::Lazy,
-    snapshot_period:                0,
-    init:                           false,
-};
+const CONF: OnceCell<YAMLConfig> = Default::default();
 
 #[derive(Default)]
 pub struct YAMLConfig {
@@ -69,18 +43,11 @@ pub struct YAMLConfig {
 }
 
 pub fn init_global_conf(file: &str) {
-    unsafe {
-        CONF = YAMLConfig::new(file);
-    }
+    CONF.set(YAMLConfig::new(file)).unwrap();
 }
 
 pub fn borrow_global_conf() -> Option<&'static YAMLConfig> {
-    let conf = unsafe { &CONF };
-    if conf.init {
-        return Some(conf);
-    }else{
-        None
-    }
+    CONF.get()
 }
 
 impl YAMLConfig {

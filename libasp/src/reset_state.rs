@@ -4,6 +4,7 @@ use std::fmt::{
     Debug,
     Formatter,
 };
+use libafl::state::{HasExecutions, State};
 use libafl_qemu::*;
 use std::io::Write;
 use std::fs::File;
@@ -98,7 +99,9 @@ impl ResetState {
         }
     }
 
-    fn save_full(&mut self, emu: &Emulator) {
+    fn save_full<QT,S,E>(&mut self, emu: &Emulator<QT, S,E>) where E: EmuExitHandler<QT, S>,
+    S:HasExecutions+ State,
+    QT: QemuHelperTuple<S> {
         log::info!("Saving full snapshot");
 
         // Saving registers
@@ -127,7 +130,9 @@ impl ResetState {
     }
 
     /* Super lazy reset */
-    fn load_super_lazy(&self, emu: &Emulator) {
+    fn load_super_lazy<QT,S,E>(&self, emu: &Emulator<QT,S,E>)where E: EmuExitHandler<QT, S>,
+    S:HasExecutions+ State,
+    QT: QemuHelperTuple<S> {
         // Resetting registers
         for (r, v) in self.regs.iter().enumerate() {
             emu.write_reg(r as i32, *v).unwrap();
@@ -135,7 +140,9 @@ impl ResetState {
     }
 
     /* Lazy snapshot reset */
-    fn load_lazy(&self, emu: &Emulator) {
+    fn load_lazy<QT,S,E>(&self, emu: &Emulator<QT,S,E>)where E: EmuExitHandler<QT, S>,
+    S:HasExecutions+ State,
+    QT: QemuHelperTuple<S> {
         log::info!("Loading lazy");
 
         // Resetting registers
@@ -150,7 +157,9 @@ impl ResetState {
     }
 
     /* Rust snapshot reset */
-    fn load_rust_snapshot(&self, emu: &Emulator) {
+    fn load_rust_snapshot<QT,S,E>(&self, emu: &Emulator<QT,S,E>)where E: EmuExitHandler<QT, S>,
+    S:HasExecutions+ State,
+    QT: QemuHelperTuple<S> {
         log::info!("Loading Rust snapshot");
 
         // Resetting registers
@@ -199,12 +208,16 @@ impl ResetState {
     }
 
     /* Qemu snapshot reset */
-    fn load_qemu_snapshot(&self, _emu: &Emulator) {
+    fn load_qemu_snapshot<QT,S,E>(&self, _emu: &Emulator<QT,S,E>) where E: EmuExitHandler<QT, S>,
+    S:HasExecutions+ State,
+    QT: QemuHelperTuple<S> {
         panic!("QEMU snapshot unimplemented!");
     }
 
     /* Hard reset */
-    fn load_hard_reset(&self, emu: &Emulator) {
+    fn load_hard_reset<QT,S,E>(&self, emu: &Emulator<QT,S,E>) where E: EmuExitHandler<QT, S>,
+    S:HasExecutions+ State,
+    QT: QemuHelperTuple<S> {
         log::info!("Loading hard snapshot");
 
         // Resetting CPU
@@ -249,7 +262,9 @@ impl ResetState {
         file.write(&self.sram).unwrap();
     }
 
-    pub fn current_sram_to_file(&mut self, emu: &Emulator) {
+    pub fn current_sram_to_file<QT,S,E>(&mut self, emu: &Emulator<QT,S,E>) where E: EmuExitHandler<QT, S>,
+    S:HasExecutions+ State,
+    QT: QemuHelperTuple<S>{
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
         unsafe {
             cpu.write_mem(SRAM_START, &self.sram);
@@ -259,13 +274,19 @@ impl ResetState {
     }
 }
 
-pub trait Reset {
-    fn save(&mut self, emu: &Emulator, level: &ResetLevel);
-    fn load(&mut self, emu: &Emulator, level: &ResetLevel);
+pub trait Reset<QT,S,E>
+where E: EmuExitHandler<QT, S>,
+S:HasExecutions+ State,
+QT: QemuHelperTuple<S> {
+    fn save(&mut self, emu: &Emulator<QT,S,E>, level: &ResetLevel);
+    fn load(&mut self, emu: &Emulator<QT,S,E>, level: &ResetLevel);
 }
 
-impl Reset for ResetState {
-    fn save(&mut self, emu: &Emulator, level: &ResetLevel) {
+impl<QT,S,E> Reset<QT,S,E> for ResetState
+where E: EmuExitHandler<QT, S>,
+S:HasExecutions+ State,
+QT: QemuHelperTuple<S> {
+    fn save(&mut self, emu: &Emulator<QT,S,E>, level: &ResetLevel) {
         if self.saved {
             log::error!("State has already been saved!");
             return
@@ -280,7 +301,7 @@ impl Reset for ResetState {
         self.saved = true;
     }
 
-    fn load(&mut self, emu: &Emulator, level: &ResetLevel){
+    fn load(&mut self, emu: &Emulator<QT,S,E>, level: &ResetLevel){
         match level {
             ResetLevel::SuperLazy => self.load_super_lazy(emu),
             ResetLevel::Lazy => self.load_lazy(emu),

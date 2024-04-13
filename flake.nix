@@ -34,32 +34,49 @@
         pkgs = import nixpkgs { inherit overlays system; };
       });
     in
-    {
+    { 
       # Development environment output
       devShells = forAllSystems ({ pkgs }: {
         default = pkgs.mkShell {
+          hardeningDisable = [ "fortify" ];
           # The Nix packages provided in the environment
           packages = (with pkgs; [
-            # The package provided by our custom overlay. Includes cargo, Clippy, cargo-fmt,
-            # rustdoc, rustfmt, and other tools.
+            # DevTools
             rustToolchain
             cargo-make
-            glib
-            libgcrypt
             gcc-arm-embedded
             git
+            clang
+            clang_17
+            libcxx
+            pkg-config
+            zsh
+
+            # QEMU Libraries
+            glib
+            libgcrypt
+            libclang
+            rust-bindgen-unwrapped
             libgit2
+            libllvm
+
+            meson
             ninja
             nettle
             python311Packages.libfdt
             python311
-            pkg-config
             pixman
             qemu
             xorg.libX11
             zlib
-            zsh
+
+            # getting Rustanalyzer to work
+
+            openssl
           ]) ++ pkgs.lib.optionals pkgs.stdenv.isDarwin (with pkgs; [ libiconv ]);
+          LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+          CC = "${pkgs.clang.out}/clang";
+          CXX = "${pkgs.clang.out}/clang++";
         };
       });
     };

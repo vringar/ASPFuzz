@@ -26,8 +26,8 @@ libasp = { path = "../libasp" }
 
 serde = { version = "1.0", default-features = false, features = ["alloc"] } # serialization lib
 log = "0.4"
-env_logger = "0.9"
-nix = "0.24"
+env_logger = "0.11.3"
+nix = "0.28"
 chrono = "0.4"
-rangemap = "1.0"
+rangemap = "1.5.0"
 clap = { version = "4.0", features = ["derive"] }

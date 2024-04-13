@@ -3,6 +3,7 @@
 use libafl_qemu::*;
 use libafl::prelude::*;
 
+use libafl_bolts::Named;
 use log;
 use serde::{Deserialize, Serialize};
 use core::fmt::{Debug};
@@ -66,10 +67,12 @@ impl ExceptionHandler {
         }
     }
 
-    pub fn start(&self, emu: &Emulator) {
+    pub fn start<QT, S, E>(&self, emu: &Emulator<QT, S, E>) where E: EmuExitHandler<QT, S>,
+    S:HasExecutions+ State,
+    QT: QemuHelperTuple<S>{
         unsafe { EXCEPTION_VECTOR_BASE = self.exception_vector_base};
         //emu.set_hook(self.exception_addr_reset, exception_hook, emu as *const _ as u64, false);
-        emu.set_hook(self.exception_addr_undef, exception_hook, emu as *const _ as u64, false);
+        emu.set_hook(self.exception_addr_undef, exception_hook::<QT,S,E>, emu as *const _ as u64, false);
         emu.set_hook(self.exception_addr_svc, exception_hook, emu as *const _ as u64, false);
         emu.set_hook(self.exception_addr_preab, exception_hook, emu as *const _ as u64, false);
         emu.set_hook(self.exception_addr_datab, exception_hook, emu as *const _ as u64, false);
@@ -78,7 +81,9 @@ impl ExceptionHandler {
         emu.set_hook(self.exception_addr_fiq, exception_hook, emu as *const _ as u64, false);
     }
 
-    pub fn stop(&self, emu: &Emulator) {
+    pub fn stop<QT, S, E>(&self, emu: &Emulator<QT, S, E>)where E: EmuExitHandler<QT, S>,
+    S:HasExecutions+ State,
+    QT: QemuHelperTuple<S> {
         //let _ = emu.remove_hook(self.exception_addr_reset, true);
         let _ = emu.remove_hook(self.exception_addr_undef, true);
         let _ = emu.remove_hook(self.exception_addr_svc, true);
@@ -90,7 +95,7 @@ impl ExceptionHandler {
     }
 }
 
-extern "C" fn exception_hook(pc: GuestAddr, data: u64) {
+extern "C" fn exception_hook<QT,S,E>(pc: GuestAddr, data: u64) {
     log::debug!("Exception hook: pc={:#x}", pc);
 
     match ((pc - unsafe { EXCEPTION_VECTOR_BASE }) / 4).into() {
@@ -117,7 +122,7 @@ extern "C" fn exception_hook(pc: GuestAddr, data: u64) {
         _                       => log::error!("Unknown exception triggered"),
     }
 
-    let emu = unsafe { (data as *const Emulator).as_ref().unwrap() };
+    let emu = unsafe { (data as *const Emulator<QT,S,E>).as_ref().unwrap() };
     emu.current_cpu().unwrap().trigger_breakpoint();
 }
 
@@ -128,7 +133,7 @@ pub struct ExceptionFeedback {}
 
 impl<S> Feedback<S> for ExceptionFeedback
 where
-    S: UsesInput + HasClientPerfMonitor,
+    S: UsesInput + State,
 {
     #[allow(clippy::wrong_self_convention)]
     fn is_interesting<EM, OT>(

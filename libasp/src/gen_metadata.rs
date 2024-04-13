@@ -3,6 +3,7 @@
 
 use libafl_qemu::*;
 use libafl::prelude::*;
+use libafl_bolts::{impl_serdeany, Named};
 
 use log;
 use serde::{Deserialize, Serialize};
@@ -64,7 +65,7 @@ pub struct CustomMetadataFeedback {
 
 impl<S> Feedback<S> for CustomMetadataFeedback
 where
-    S: UsesInput  + HasClientPerfMonitor,
+    S: UsesInput  + State,
 {
     #[allow(clippy::wrong_self_convention)]
     fn is_interesting<EM, OT>(
@@ -83,7 +84,7 @@ where
         Ok(true)
     }
 
-    fn append_metadata(&mut self, _state: &mut S, testcase: &mut Testcase<S::Input>) -> Result<(), Error> {
+    fn append_metadata<EM,OT>(&mut self, _state: &mut S, _em: &mut EM, ot: &OT, testcase: &mut Testcase<S::Input>) -> Result<(), Error> {
         let emu = unsafe { (self.emulator as *const Emulator).as_ref().unwrap() };
         // Read regs
         let mut regs = Vec::new();
