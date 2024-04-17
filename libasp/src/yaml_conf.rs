@@ -66,21 +66,14 @@ impl YAMLConfig {
         let qemu_zen = conf["qemu"]["zen"]
             .as_str()
             .expect("Expecting 'qemu: zen:' in yaml");
-        let qemu_sram_size;
-        if qemu_zen == "Zen1" {
-            qemu_sram_size = 0x40000 as GuestAddr;
-        } else if qemu_zen == "Zen+" {
-            qemu_sram_size = 0x40000 as GuestAddr;
-        } else if qemu_zen == "Zen2" {
-            qemu_sram_size = 0x50000 as GuestAddr;
-        } else if qemu_zen == "Zen3" {
-            qemu_sram_size = 0x50000 as GuestAddr;
-        } else if qemu_zen == "ZenTesla" {
-            qemu_sram_size = 0x40000 as GuestAddr;
+        let qemu_sram_size = if qemu_zen == "Zen1" || qemu_zen == "Zen+" || qemu_zen == "ZenTesla" {
+            0x40000
+        } else if qemu_zen == "Zen2" || qemu_zen == "Zen3" {
+            0x50000
         } else {
             println!("{} generation not supported yet.", qemu_zen);
             std::process::exit(8);
-        }
+        } as GuestAddr;
         let qemu_on_chip_bl_path = conf["qemu"]["on_chip_bl_path"]
             .as_str()
             .expect("Expecting 'qemu: on_chip_bl_path:' in yaml");

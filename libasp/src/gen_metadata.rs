@@ -1,9 +1,8 @@
-/// Generating metadata whenever a test-case is an objective
-/// Saves all register values
-
-use libafl_qemu::*;
 use libafl::prelude::*;
 use libafl_bolts::{impl_serdeany, Named};
+/// Generating metadata whenever a test-case is an objective
+/// Saves all register values
+use libafl_qemu::*;
 
 use log;
 use serde::{Deserialize, Serialize};
@@ -65,7 +64,7 @@ pub struct CustomMetadataFeedback {
 
 impl<S> Feedback<S> for CustomMetadataFeedback
 where
-    S: UsesInput  + State,
+    S: UsesInput + State,
 {
     #[allow(clippy::wrong_self_convention)]
     fn is_interesting<EM, OT>(
@@ -84,12 +83,18 @@ where
         Ok(true)
     }
 
-    fn append_metadata<EM,OT>(&mut self, _state: &mut S, _em: &mut EM, _ot: &OT, testcase: &mut Testcase<S::Input>) -> Result<(), Error> {
+    fn append_metadata<EM, OT>(
+        &mut self,
+        _state: &mut S,
+        _em: &mut EM,
+        _ot: &OT,
+        testcase: &mut Testcase<S::Input>,
+    ) -> Result<(), Error> {
         let emu = unsafe { (self.emulator as *const Qemu).as_ref().unwrap() };
         // Read regs
         let mut regs = Vec::new();
         for r in Regs::iter() {
-           regs.push(emu.read_reg(r).unwrap());
+            regs.push(emu.read_reg(r).unwrap());
         }
         testcase.add_metadata(CustomMetadata::new(regs));
         Ok(())
@@ -107,8 +112,6 @@ impl CustomMetadataFeedback {
     /// Creates a new [`CustomMetadataFeedback`]
     #[must_use]
     pub fn new(emulator: u64) -> Self {
-        Self {
-            emulator
-        }
+        Self { emulator }
     }
 }
