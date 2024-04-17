@@ -24,16 +24,16 @@ pub enum ExceptionType {
 impl From<u32> for ExceptionType {
     fn from(orig: u32) -> Self {
         match orig {
-            0 => return ExceptionType::RESET,
-            1 => return ExceptionType::UNDEF,
-            2 => return ExceptionType::SVC,
-            3 => return ExceptionType::PREAB,
-            4 => return ExceptionType::DATAB,
-            5 => return ExceptionType::HYP,
-            6 => return ExceptionType::IRQ,
-            7 => return ExceptionType::FIQ,
-            _ => return ExceptionType::UNKNOWN,
-        };
+            0 => ExceptionType::RESET,
+            1 => ExceptionType::UNDEF,
+            2 => ExceptionType::SVC,
+            3 => ExceptionType::PREAB,
+            4 => ExceptionType::DATAB,
+            5 => ExceptionType::HYP,
+            6 => ExceptionType::IRQ,
+            7 => ExceptionType::FIQ,
+            _ => ExceptionType::UNKNOWN,
+        }
     }
 }
 
@@ -48,6 +48,7 @@ pub struct ExceptionHandler {
     exception_addr_hyp      : GuestAddr,
     exception_addr_irq      : GuestAddr,
     exception_addr_fiq      : GuestAddr,
+    hook_ids : Vec<InstructionHookId>
 }
 
 static mut EXCEPTION_VECTOR_BASE: GuestAddr = 0;
@@ -55,7 +56,7 @@ static mut EXCEPTION_VECTOR_BASE: GuestAddr = 0;
 impl ExceptionHandler {
     pub fn new(exception_vector_base: GuestAddr) -> Self {
         Self {
-            exception_vector_base   : exception_vector_base,
+            exception_vector_base,
             exception_addr_reset    : exception_vector_base + 4*(ExceptionType::RESET as u32),
             exception_addr_undef    : exception_vector_base + 4*(ExceptionType::UNDEF as u32),
             exception_addr_svc      : exception_vector_base + 4*(ExceptionType::SVC as u32),
@@ -64,38 +65,31 @@ impl ExceptionHandler {
             exception_addr_hyp      : exception_vector_base + 4*(ExceptionType::HYP as u32),
             exception_addr_irq      : exception_vector_base + 4*(ExceptionType::IRQ as u32),
             exception_addr_fiq      : exception_vector_base + 4*(ExceptionType::FIQ as u32),
+            hook_ids: vec![]
         }
     }
 
-    pub fn start<QT, S, E>(&self, emu: &Emulator<QT, S, E>) where E: EmuExitHandler<QT, S>,
-    S:HasExecutions+ State,
-    QT: QemuHelperTuple<S>{
+    pub fn start(&mut self, emu: &Qemu) {
         unsafe { EXCEPTION_VECTOR_BASE = self.exception_vector_base};
         //emu.set_hook(self.exception_addr_reset, exception_hook, emu as *const _ as u64, false);
-        emu.set_hook(self.exception_addr_undef, exception_hook::<QT,S,E>, emu as *const _ as u64, false);
-        emu.set_hook(self.exception_addr_svc, exception_hook, emu as *const _ as u64, false);
-        emu.set_hook(self.exception_addr_preab, exception_hook, emu as *const _ as u64, false);
-        emu.set_hook(self.exception_addr_datab, exception_hook, emu as *const _ as u64, false);
-        emu.set_hook(self.exception_addr_hyp, exception_hook, emu as *const _ as u64, false);
-        emu.set_hook(self.exception_addr_irq, exception_hook, emu as *const _ as u64, false);
-        emu.set_hook(self.exception_addr_fiq, exception_hook, emu as *const _ as u64, false);
+        self.hook_ids.push(emu.set_hook(emu as *const _ as u64, self.exception_addr_undef, exception_hook,  false));
+        self.hook_ids.push(emu.set_hook(emu as *const _ as u64,self.exception_addr_svc, exception_hook, false));
+        self.hook_ids.push(emu.set_hook(emu as *const _ as u64,self.exception_addr_preab, exception_hook, false));
+        self.hook_ids.push(emu.set_hook(emu as *const _ as u64,self.exception_addr_datab, exception_hook, false));
+        self.hook_ids.push(emu.set_hook(emu as *const _ as u64,self.exception_addr_hyp, exception_hook, false));
+        self.hook_ids.push(emu.set_hook(emu as *const _ as u64,self.exception_addr_irq, exception_hook, false));
+        self.hook_ids.push(emu.set_hook(emu as *const _ as u64,self.exception_addr_fiq, exception_hook, false));
     }
 
-    pub fn stop<QT, S, E>(&self, emu: &Emulator<QT, S, E>)where E: EmuExitHandler<QT, S>,
-    S:HasExecutions+ State,
-    QT: QemuHelperTuple<S> {
+    pub fn stop(&self, emu: Qemu) {
+        for &hook_id in &self.hook_ids {
+            let _ = emu.remove_hook(hook_id, true);
+        }
         //let _ = emu.remove_hook(self.exception_addr_reset, true);
-        let _ = emu.remove_hook(self.exception_addr_undef, true);
-        let _ = emu.remove_hook(self.exception_addr_svc, true);
-        let _ = emu.remove_hook(self.exception_addr_preab, true);
-        let _ = emu.remove_hook(self.exception_addr_datab, true);
-        let _ = emu.remove_hook(self.exception_addr_hyp, true);
-        let _ = emu.remove_hook(self.exception_addr_irq, true);
-        let _ = emu.remove_hook(self.exception_addr_fiq, true);
     }
 }
 
-extern "C" fn exception_hook<QT,S,E>(pc: GuestAddr, data: u64) {
+extern "C" fn exception_hook(data: u64, pc: GuestAddr) {
     log::debug!("Exception hook: pc={:#x}", pc);
 
     match ((pc - unsafe { EXCEPTION_VECTOR_BASE }) / 4).into() {
@@ -122,7 +116,7 @@ extern "C" fn exception_hook<QT,S,E>(pc: GuestAddr, data: u64) {
         _                       => log::error!("Unknown exception triggered"),
     }
 
-    let emu = unsafe { (data as *const Emulator<QT,S,E>).as_ref().unwrap() };
+    let emu = unsafe { (data as *const Qemu).as_ref().unwrap() };
     emu.current_cpu().unwrap().trigger_breakpoint();
 }
 

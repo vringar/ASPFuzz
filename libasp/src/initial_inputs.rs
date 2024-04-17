@@ -9,6 +9,12 @@ use std::path::{
 
 pub struct InitialInput {}
 
+impl Default for InitialInput {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InitialInput {
     pub fn new() -> Self {
         Self {}
@@ -42,7 +48,7 @@ impl InitialInput {
             new_input_path.push(format!("input{:#04}", i));
             fs::write(new_input_path, new_input_image).unwrap();
         }
-        return input_dir;
+        input_dir
     }
 }
 

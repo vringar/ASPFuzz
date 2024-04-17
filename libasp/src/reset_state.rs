@@ -4,7 +4,7 @@ use std::fmt::{
     Debug,
     Formatter,
 };
-use libafl::state::{HasExecutions, State};
+
 use libafl_qemu::*;
 use std::io::Write;
 use std::fs::File;
@@ -18,7 +18,7 @@ pub struct ResetState {
     saved :                 bool,
     sram_size:              GuestAddr,
     num_loads :             usize,
-    regs :                  Vec<u64>,
+    regs :                  Vec<u32>,
     sram :                  Vec<u8>,
     timer_count_0 :         u64,
     timer_count_1 :         u64,
@@ -87,7 +87,7 @@ impl ResetState {
     pub fn new(sram_size: GuestAddr) -> Self {
         Self {
             saved :             false,
-            sram_size:          sram_size,
+            sram_size,
             num_loads :         0,
             regs :              vec![],
             sram :              vec![0; sram_size.try_into().unwrap()],
@@ -99,9 +99,7 @@ impl ResetState {
         }
     }
 
-    fn save_full<QT,S,E>(&mut self, emu: &Emulator<QT, S,E>) where E: EmuExitHandler<QT, S>,
-    S:HasExecutions+ State,
-    QT: QemuHelperTuple<S> {
+    fn save_full(&mut self, emu: &Qemu) {
         log::info!("Saving full snapshot");
 
         // Saving registers
@@ -130,9 +128,7 @@ impl ResetState {
     }
 
     /* Super lazy reset */
-    fn load_super_lazy<QT,S,E>(&self, emu: &Emulator<QT,S,E>)where E: EmuExitHandler<QT, S>,
-    S:HasExecutions+ State,
-    QT: QemuHelperTuple<S> {
+    fn load_super_lazy(&self, emu: &Qemu){
         // Resetting registers
         for (r, v) in self.regs.iter().enumerate() {
             emu.write_reg(r as i32, *v).unwrap();
@@ -140,9 +136,7 @@ impl ResetState {
     }
 
     /* Lazy snapshot reset */
-    fn load_lazy<QT,S,E>(&self, emu: &Emulator<QT,S,E>)where E: EmuExitHandler<QT, S>,
-    S:HasExecutions+ State,
-    QT: QemuHelperTuple<S> {
+    fn load_lazy(&self, emu: &Qemu) {
         log::info!("Loading lazy");
 
         // Resetting registers
@@ -152,14 +146,12 @@ impl ResetState {
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
         let sram_slice = &self.sram[((self.sram_size-LAZY_SRAM_SIZE) as usize)..(self.sram_size as usize)];
         unsafe {
-            cpu.write_mem(self.sram_size-LAZY_SRAM_SIZE, &sram_slice);
+            cpu.write_mem(self.sram_size-LAZY_SRAM_SIZE, sram_slice);
         }
     }
 
     /* Rust snapshot reset */
-    fn load_rust_snapshot<QT,S,E>(&self, emu: &Emulator<QT,S,E>)where E: EmuExitHandler<QT, S>,
-    S:HasExecutions+ State,
-    QT: QemuHelperTuple<S> {
+    fn load_rust_snapshot(&self, emu: &Qemu){
         log::info!("Loading Rust snapshot");
 
         // Resetting registers
@@ -208,22 +200,18 @@ impl ResetState {
     }
 
     /* Qemu snapshot reset */
-    fn load_qemu_snapshot<QT,S,E>(&self, _emu: &Emulator<QT,S,E>) where E: EmuExitHandler<QT, S>,
-    S:HasExecutions+ State,
-    QT: QemuHelperTuple<S> {
+    fn load_qemu_snapshot(&self, _emu: &Qemu) {
         panic!("QEMU snapshot unimplemented!");
     }
 
     /* Hard reset */
-    fn load_hard_reset<QT,S,E>(&self, emu: &Emulator<QT,S,E>) where E: EmuExitHandler<QT, S>,
-    S:HasExecutions+ State,
-    QT: QemuHelperTuple<S> {
+    fn load_hard_reset(&self, emu: &Qemu) {
         log::info!("Loading hard snapshot");
 
         // Resetting CPU
         log::debug!("Starting CPU reset");
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
-        cpu.cpu_reset();
+        cpu.reset();
         log::debug!("CPU reset successful");
 
         // Zero SRAM
@@ -250,7 +238,10 @@ impl ResetState {
 
         // Run until fuzzing start address
         emu.set_breakpoint(self.regs[Regs::Pc as usize] as GuestAddr);
-        emu.start(&cpu);
+        unsafe {
+            // TODO return result here
+            emu.run().unwrap();
+        }
         emu.remove_breakpoint(self.regs[Regs::Pc as usize] as GuestAddr);
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
         let pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
@@ -259,34 +250,27 @@ impl ResetState {
 
     pub fn sram_to_file(&self) {
         let mut file = File::create("sram.dump").unwrap();
-        file.write(&self.sram).unwrap();
+        file.write_all(&self.sram).unwrap();
     }
 
-    pub fn current_sram_to_file<QT,S,E>(&mut self, emu: &Emulator<QT,S,E>) where E: EmuExitHandler<QT, S>,
-    S:HasExecutions+ State,
-    QT: QemuHelperTuple<S>{
+    pub fn current_sram_to_file(&mut self, emu: &Qemu) {
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
         unsafe {
             cpu.write_mem(SRAM_START, &self.sram);
         }
         let mut file = File::create("sram.dump").unwrap();
-        file.write(&self.sram).unwrap();
+        file.write_all(&self.sram).unwrap();
     }
 }
 
-pub trait Reset<QT,S,E>
-where E: EmuExitHandler<QT, S>,
-S:HasExecutions+ State,
-QT: QemuHelperTuple<S> {
-    fn save(&mut self, emu: &Emulator<QT,S,E>, level: &ResetLevel);
-    fn load(&mut self, emu: &Emulator<QT,S,E>, level: &ResetLevel);
+pub trait Reset
+ {
+    fn save(&mut self, emu: &Qemu, level: &ResetLevel);
+    fn load(&mut self, emu: &Qemu, level: &ResetLevel);
 }
 
-impl<QT,S,E> Reset<QT,S,E> for ResetState
-where E: EmuExitHandler<QT, S>,
-S:HasExecutions+ State,
-QT: QemuHelperTuple<S> {
-    fn save(&mut self, emu: &Emulator<QT,S,E>, level: &ResetLevel) {
+impl Reset for ResetState {
+    fn save(&mut self, emu: &Qemu, level: &ResetLevel) {
         if self.saved {
             log::error!("State has already been saved!");
             return
@@ -301,7 +285,7 @@ QT: QemuHelperTuple<S> {
         self.saved = true;
     }
 
-    fn load(&mut self, emu: &Emulator<QT,S,E>, level: &ResetLevel){
+    fn load(&mut self, emu: &Qemu, level: &ResetLevel){
         match level {
             ResetLevel::SuperLazy => self.load_super_lazy(emu),
             ResetLevel::Lazy => self.load_lazy(emu),
@@ -317,11 +301,11 @@ impl Debug for ResetLevel {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(),std::fmt::Error> {
         let mut out_str = "".to_string();
         match *self {
-            ResetLevel::SuperLazy => out_str.push_str(&"SuperLazy".to_string()),
-            ResetLevel::Lazy => out_str.push_str(&"Lazy".to_string()),
-            ResetLevel::RustSnapshot => out_str.push_str(&"RustSnapshot".to_string()),
-            ResetLevel::QemuSnapshot => out_str.push_str(&"QemuSnapshot".to_string()),
-            ResetLevel::HardReset => out_str.push_str(&"HardReset".to_string()),
+            ResetLevel::SuperLazy => out_str.push_str("SuperLazy"),
+            ResetLevel::Lazy => out_str.push_str("Lazy"),
+            ResetLevel::RustSnapshot => out_str.push_str("RustSnapshot"),
+            ResetLevel::QemuSnapshot => out_str.push_str("QemuSnapshot"),
+            ResetLevel::HardReset => out_str.push_str("HardReset"),
         }
         write!(f, "{}", out_str)
     }
@@ -347,11 +331,11 @@ impl Debug for ResetState {
 
         /* Stats to string */
         out_str.push_str(&format!("[{}]\n", if self.saved { "INIT" } else { "UNINIT" }));
-        out_str.push_str(&"Stats:\n".to_string());
+        out_str.push_str("Stats:\n");
         out_str.push_str(&format!("\tLoads =\t{}\n", self.num_loads));
 
         /* Register to string */
-        out_str.push_str(&"Regs:\n".to_string());
+        out_str.push_str("Regs:\n");
         for (i, item) in self.regs.iter().enumerate() {
             let mut reg_name: String = "UDef".to_string();
             if i < 13 {
@@ -370,7 +354,7 @@ impl Debug for ResetState {
         }
 
         /* SRAM status to string */
-        out_str.push_str(&"SRAM:\n".to_string());
+        out_str.push_str("SRAM:\n");
         out_str.push_str(&format!("\tNon zero =\t{}\n", self.sram.iter().filter(|&n| *n != 0).count()));
         let mut addr_first = 0;
         for (i, item) in self.sram.iter().enumerate() {

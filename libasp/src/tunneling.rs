@@ -1,35 +1,28 @@
-/// Tunneling allows statically or dynamically setting register values at a specific PC value
-/// This especially allows skipping comparisons with magic values or checksums
-use libafl::state::{HasExecutions, State};
+
 use libafl_qemu::*;
 use log;
 
 static mut TUNNELS_CMPS: Vec<(GuestAddr, String)> = vec![];
 
-pub fn add_tunnels_cmp<QT,S,E>(addr: GuestAddr, r0: &str, emu: &Emulator<QT, S, E>)
-where E: EmuExitHandler<QT, S>,
-S:HasExecutions+ State,
-QT: QemuHelperTuple<S>
+pub fn add_tunnels_cmp<QT,S,E>(addr: GuestAddr, r0: &str, emu: &Qemu)
   {
     let cmp = (addr, r0.to_string());
     unsafe { TUNNELS_CMPS.push(cmp); }
-    emu.qemu().set_hook(addr, tunnels_cmp_hook::<QT,S,E>, emu as *const _ as u64, false);
+    emu.set_hook(emu as *const _ as u64, addr, tunnels_cmp_hook,  false);
 }
 
-extern "C" fn tunnels_cmp_hook<QT,S,E>(pc: GuestAddr, data: u64) where E: EmuExitHandler<QT, S>,
-S:HasExecutions+ State,
-QT: QemuHelperTuple<S>{
+extern "C" fn tunnels_cmp_hook(data: u64, pc: GuestAddr, ) {
     log::debug!("Tunnels cmp hook: pc={:#x}", pc);
-    let emu = unsafe { (data as *const Emulator<QT,S,E>).as_ref().unwrap() };
+    let emu = unsafe { (data as *const Qemu).as_ref().unwrap() };
     for cmp in unsafe { TUNNELS_CMPS.iter() } {
         if cmp.0 == pc {
             log::debug!("Found matching tunnels cmp: [{:#x}, {}]", cmp.0, cmp.1);
             if cmp.1.parse::<GuestAddr>().is_ok(){
-                emu.qemu().write_reg(Regs::R0, cmp.1.parse::<u32>().unwrap()).unwrap();
+                emu.write_reg(Regs::R0, cmp.1.parse::<u32>().unwrap()).unwrap();
                 break;
             } else {
-                let r0: u64 = emu.qemu().read_reg(str_reg_to_regs(&cmp.1)).unwrap();
-                emu.qemu().write_reg(Regs::R0, r0).unwrap();
+                let r0: u32 = emu.read_reg(str_reg_to_regs(&cmp.1)).unwrap();
+                emu.write_reg(Regs::R0, r0).unwrap();
                 break;
             }
         }
@@ -38,39 +31,39 @@ QT: QemuHelperTuple<S>{
 
 pub fn str_reg_to_regs(reg: &str) -> Regs {
     match reg {
-        "R0"    => return Regs::R0,
-        "R1"    => return Regs::R1,
-        "R2"    => return Regs::R2,
-        "R3"    => return Regs::R3,
-        "R4"    => return Regs::R4,
-        "R5"    => return Regs::R5,
-        "R6"    => return Regs::R6,
-        "R7"    => return Regs::R7,
-        "R8"    => return Regs::R8,
-        "R9"    => return Regs::R9,
-        "R10"   => return Regs::R10,
-        "R11"   => return Regs::R11,
-        "R12"   => return Regs::R12,
-        "R13"   => return Regs::R13,
-        "R14"   => return Regs::R14,
-        "R15"   => return Regs::R15,
-        "R25"   => return Regs::R25,
-        "Sp"    => return Regs::Sp,
-        "SP"    => return Regs::Sp,
-        "Lr"    => return Regs::Lr,
-        "LR"    => return Regs::Lr,
-        "Pc"    => return Regs::Pc,
-        "PC"    => return Regs::Pc,
-        "Sb"    => return Regs::Sb,
-        "SB"    => return Regs::Sb,
-        "Sl"    => return Regs::Sl,
-        "SL"    => return Regs::Sl,
-        "Fp"    => return Regs::Fp,
-        "FP"    => return Regs::Fp,
-        "Ip"    => return Regs::Ip,
-        "IP"    => return Regs::Ip,
-        "Cpsr"  => return Regs::Cpsr,
-        "CPSR"  => return Regs::Cpsr,
+        "R0"    => Regs::R0,
+        "R1"    => Regs::R1,
+        "R2"    => Regs::R2,
+        "R3"    => Regs::R3,
+        "R4"    => Regs::R4,
+        "R5"    => Regs::R5,
+        "R6"    => Regs::R6,
+        "R7"    => Regs::R7,
+        "R8"    => Regs::R8,
+        "R9"    => Regs::R9,
+        "R10"   => Regs::R10,
+        "R11"   => Regs::R11,
+        "R12"   => Regs::R12,
+        "R13"   => Regs::R13,
+        "R14"   => Regs::R14,
+        "R15"   => Regs::R15,
+        "R25"   => Regs::R25,
+        "Sp"    => Regs::Sp,
+        "SP"    => Regs::Sp,
+        "Lr"    => Regs::Lr,
+        "LR"    => Regs::Lr,
+        "Pc"    => Regs::Pc,
+        "PC"    => Regs::Pc,
+        "Sb"    => Regs::Sb,
+        "SB"    => Regs::Sb,
+        "Sl"    => Regs::Sl,
+        "SL"    => Regs::Sl,
+        "Fp"    => Regs::Fp,
+        "FP"    => Regs::Fp,
+        "Ip"    => Regs::Ip,
+        "IP"    => Regs::Ip,
+        "Cpsr"  => Regs::Cpsr,
+        "CPSR"  => Regs::Cpsr,
         _       => panic!("Cannot match to valid ARM register"),
     }
 }
