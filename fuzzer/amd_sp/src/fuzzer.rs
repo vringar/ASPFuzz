@@ -442,19 +442,8 @@ extern "C" fn on_vcpu(mut cpu: CPU) {
         // Feedback to rate the interestingness of an input
         let mut feedback = MaxMapFeedback::new(&edges_observer);
 
-        #[allow(unused_assignments, unused_mut)]
         let mut objective_coverage_feedback =
             MaxMapFeedback::with_name("objective_coverage_feedback", &edges_observer);
-
-        #[cfg(feature = "debug")]
-        {
-            objective_coverage_feedback = MaxMapFeedback::with_names_tracking(
-                "objective_coverage_feedback",
-                "edges",
-                true,
-                false,
-            );
-        }
 
         // A feedback to choose if an input is a solution or not
         let mut objective = feedback_and_fast!(
@@ -499,13 +488,13 @@ extern "C" fn on_vcpu(mut cpu: CPU) {
         log_drcov_path.push("drcov.log");
         let mut rangemap = RangeMap::<usize, (u16, String)>::new();
         rangemap.insert(
-            (0x0 as usize)..(0xffff_9000 as usize),
+            0x0_usize..0xffff_9000_usize,
             (0, "on-chip-ryzen-zen.bl".to_string()),
         );
 
         // Configure QEMU hook helper
         let mut hooks = QemuHooks::new(
-            emu.clone(),
+            emu,
             tuple_list!(
                 QemuEdgeCoverageHelper::default(),
                 QemuDrCovHelper::new(
