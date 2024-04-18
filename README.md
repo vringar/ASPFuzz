@@ -45,9 +45,11 @@ git submodule update --init
 ## Run
 
 1. Navigate to `fuzzer/amd_sp/`.
+
     ```bash
     cd fuzzer/amd_sp/
     ```
+
 2. Pick a YAML file from `yaml/`
    - Fuzz the on-chip bootloader for Ryzen Zen1: `yaml/ryzen_zen1_desktop_parse_asp_flash.yaml`
    - Fuzz the on-chip bootloader for Ryzen Zen+: `yaml/ryzen_zen+_desktop_parse_asp_flash.yaml`
@@ -111,7 +113,7 @@ git submodule update --init
    - If the campaign was started with `cargo make test`, all debug output will be captured in `runs/{start_data_time}/logs/run.log`.
    - The yaml config file used for the campaign is stores as `runs/{start_data_time}/config.yaml`
 
-7. Analyze the output
+3. Analyze the output
 
 - Generate full flash ROM images from solutions: `script/solution2flashimg.py`
 - Analyze flash images for the known buffer overflow in Zen1&Zen+: `script/known_buffer_overflow.py`.

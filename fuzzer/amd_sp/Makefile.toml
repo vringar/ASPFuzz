@@ -2,8 +2,6 @@
 [env]
 PROJECT_DIR={ script = ["pwd"] }
 CROSS_CC="arm-none-eabi-gcc"
-CUSTOM_QEMU_DIR="${PROJECT_DIR}/../../qemu-libafl-asp"
-CUSTOM_QEMU_NO_BUILD={ value = "yes", condition = { files_exist = [ "${CUSTOM_QEMU_DIR}/build/libqemu-system-arm.so" ]} }
 # Disable color codes in env_logger
 RUST_LOG_STYLE="never"
 

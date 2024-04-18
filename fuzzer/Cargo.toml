@@ -1,0 +1,23 @@
+[workspace]
+members = [
+    "amd_sp",
+    "libasp"
+]
+resolver = "2"
+
+[workspace.dependencies]
+libafl = { path = "../LibAFL/libafl/", default-features = false, features = [
+    "prelude",
+] }
+libafl_bolts = { path = "../LibAFL/libafl_bolts/", default-features = false, features = [
+    "prelude",
+] }
+libafl_qemu = { path = "../LibAFL/libafl_qemu/", features = [
+    "arm",
+    "systemmode",
+], default-features = false }
+
+[profile.dev]
+debug = true
+[profile.release]
+debug = true

@@ -3,7 +3,7 @@ use log;
 
 static mut TUNNELS_CMPS: Vec<(GuestAddr, String)> = vec![];
 
-pub fn add_tunnels_cmp<QT, S, E>(addr: GuestAddr, r0: &str, emu: &Qemu) {
+pub fn add_tunnels_cmp(addr: GuestAddr, r0: &str, emu: &Qemu) {
     let cmp = (addr, r0.to_string());
     unsafe {
         TUNNELS_CMPS.push(cmp);
