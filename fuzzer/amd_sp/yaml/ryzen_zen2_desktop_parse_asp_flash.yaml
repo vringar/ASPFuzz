@@ -15,13 +15,13 @@ flash:
     # Start of flash mmap area in cpu physical memory
     start_cpu:      0x02000000
     # Base image in flash memory
-    base:           "bins/ASUS_PRIME-B450M-A-ASUS-1201.ROM"
+    base:           "bins/TUF-GAMING-B450-PLUS-II-ASUS-4202.ROM"
 
 # Input data and area
 input:
     # Initial inputs for the fuzzer
     initial:
-        -   "bins/ASUS_PRIME-B450M-A-ASUS-1201.ROM"
+        -   "bins/TUF-GAMING-B450-PLUS-II-ASUS-4202.ROM"
     # Input bytes in-order to flash memory
     mem:
         # FET

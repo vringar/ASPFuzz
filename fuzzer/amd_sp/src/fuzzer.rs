@@ -427,7 +427,6 @@ extern "C" fn on_vcpu(mut cpu: CPU) {
         ExitKind::Ok
     };
 
-    #[allow(unused_mut)]
     let mut run_client = |state: Option<_>, mut mgr, _core_id| -> Result<(), Error> {
         // Create an observation channel using the coverage map
         let edges_observer = unsafe {
@@ -512,7 +511,7 @@ extern "C" fn on_vcpu(mut cpu: CPU) {
             Hook::Empty,
             Hook::Function(exec_block_hook),
         );
-        if conf.crashes_mmap_no_write_hooks.len() != 0 {
+        if !conf.crashes_mmap_no_write_hooks.is_empty() {
             log::debug!("Adding write generation hooks");
             hooks.writes(
                 Hook::Function(gen_writes_hook),
@@ -561,12 +560,13 @@ extern "C" fn on_vcpu(mut cpu: CPU) {
     // Logging of LibAFL events
     let mut log_libafl_path = log_dir.clone();
     log_libafl_path.push("libafl.log");
-    let logfile = PathBuf::from(log_libafl_path);
+    let logfile = log_libafl_path;
     let log = RefCell::new(
         OpenOptions::new()
             .write(true)
             .create(true)
-            .open(&logfile)
+            .truncate(true)
+            .open(logfile)
             .unwrap(),
     );
 
@@ -674,12 +674,14 @@ fn parse_args() -> Vec<String> {
     }
 
     // Handle Zen generation
-    if ![String::from("Zen1"),
+    if ![
+        String::from("Zen1"),
         String::from("Zen+"),
         String::from("Zen2"),
         String::from("Zen3"),
         String::from("Zen4"),
-        String::from("ZenTesla")]
+        String::from("ZenTesla"),
+    ]
     .contains(&conf.qemu_zen)
     {
         println!("{} not a valid Zen generation.", &conf.qemu_zen);
