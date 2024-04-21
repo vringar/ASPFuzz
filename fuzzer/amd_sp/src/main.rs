@@ -1,3 +1,4 @@
+mod setup;
 #[cfg(all(target_os = "linux", not(feature = "performance")))]
 mod fuzzer;
 #[cfg(all(target_os = "linux", feature = "performance"))]
