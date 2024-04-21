@@ -70,7 +70,7 @@ where
             return Some(unsafe { COUNTER_EDGE_HOOKS } as u64);
         }
     }
-    if conf.crashes_mmap_no_write_flash_fn.len() != 0 && conf.crashes_mmap_flash_read_fn == src {
+    if !conf.crashes_mmap_no_write_flash_fn.is_empty() && conf.crashes_mmap_flash_read_fn == src {
         log::debug!("Adding block hook for flash_read_fn");
         unsafe {
             COUNTER_EDGE_HOOKS += 1;
@@ -140,7 +140,7 @@ fn gen_writes_hook<QT, S>(
     _id: Option<&mut S>,
     src: GuestAddr,
     _: *mut TCGTemp,
-    _: MemAccessInfo,
+    mem_acces_info: MemAccessInfo,
 ) -> Option<u64>
 where
     S: UsesInput,
@@ -155,7 +155,7 @@ where
             }
         }
     }
-    let size: u32 = todo!();
+    let size = mem_acces_info.size();
     log::debug!("Generate writes:");
     log::debug!("> src: {:#x}", src);
     log::debug!("> size: {}", size);

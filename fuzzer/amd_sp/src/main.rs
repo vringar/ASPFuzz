@@ -1,8 +1,8 @@
-mod setup;
 #[cfg(all(target_os = "linux", not(feature = "performance")))]
 mod fuzzer;
 #[cfg(all(target_os = "linux", feature = "performance"))]
 mod performance;
+mod setup;
 
 #[cfg(target_os = "linux")]
 pub fn main() {
