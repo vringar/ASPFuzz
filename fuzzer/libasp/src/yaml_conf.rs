@@ -5,13 +5,20 @@ use libafl_qemu::*;
 use std::fmt::{Debug, Formatter, Result};
 use std::fs::File;
 use std::io::Read;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::OnceLock;
 extern crate yaml_rust;
 use yaml_rust::YamlLoader;
 
-static CONF: OnceLock<YAMLConfig> = OnceLock::new();
+static CONF: OnceLock<RunConfig> = OnceLock::new();
 
+#[derive(Default, Debug)]
+pub struct RunConfig {
+    pub yaml_config: YAMLConfig,
+    pub num_cores: u32,
+    pub run_dir: PathBuf,
+}
 #[derive(Default)]
 pub struct YAMLConfig {
     pub config_file: String,
@@ -40,14 +47,23 @@ pub struct YAMLConfig {
     pub snapshot_period: usize,
 }
 
-pub fn init_global_conf(file: &str) {
-    CONF.set(YAMLConfig::new(file)).unwrap();
+pub fn init_global_conf(file: &str, num_cores: u32, run_dir: PathBuf) {
+    let yaml = YAMLConfig::new(file);
+
+    CONF.set(RunConfig {
+        yaml_config: yaml,
+        num_cores,
+        run_dir,
+    })
+    .unwrap();
 }
 
 pub fn borrow_global_conf() -> Option<&'static YAMLConfig> {
+    get_run_conf().map(|e| &e.yaml_config)
+}
+pub fn get_run_conf() -> Option<&'static RunConfig> {
     CONF.get()
 }
-
 impl YAMLConfig {
     fn new(config_file: &str) -> Self {
         let mut file = File::options()

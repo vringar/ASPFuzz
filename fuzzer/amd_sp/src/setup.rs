@@ -1,6 +1,15 @@
-use std::path::Path;
-
+use chrono::Local;
 use clap::{command, Parser};
+use libafl::monitors::MultiMonitor;
+use libasp::{borrow_global_conf, get_run_conf, init_global_conf};
+use std::io::Write;
+use std::{
+    cell::RefCell,
+    env,
+    fs::{self, OpenOptions},
+    path::{Path, PathBuf},
+    process::exit,
+};
 
 /// Fuzzing the on-chip-bootloader from different AMD Zen generations.
 #[derive(Parser, Debug)]
@@ -19,28 +28,29 @@ struct Args {
     num_cores: Option<u32>,
 }
 
-fn parse_args() -> Vec<String> {
+pub fn parse_args() -> Vec<String> {
     let cli_args = Args::parse();
     // Parse YAML config
     if !Path::new(&cli_args.yaml_path).exists() {
         println!("YAML file path does not exist: {}", cli_args.yaml_path);
         exit(2);
     }
-    init_global_conf(&cli_args.yaml_path);
-    let conf = borrow_global_conf().unwrap();
-    #[cfg(not(feature = "multicore"))]
-    println!("{:?}", conf);
-
-    // For multicore fuzzing a core number must be provided
-    #[cfg(feature = "multicore")]
-    if cli_args.num_cores.is_some() {
-        unsafe {
-            NUM_CORES = Some(cli_args.num_cores.unwrap());
-        }
+    let date = Local::now();
+    let run_dir = if let Some(run_dir_name) = cli_args.run_dir_name {
+        PathBuf::from(format!("runs/{}", run_dir_name))
+    } else {
+        PathBuf::from(format!("runs/{}", date.format("%Y-%m-%d_%H:%M")))
+    };
+    let num_cores = if let Some(num_cores) = cli_args.num_cores {
+        num_cores
     } else {
         println!("For multicore fuzzing a core number must be provided (`cargo make run_fast -h`)");
         exit(3);
-    }
+    };
+    init_global_conf(&cli_args.yaml_path, num_cores, run_dir);
+    let conf = borrow_global_conf().unwrap();
+
+    // For multicore fuzzing a core number must be provided
 
     //Check if pathes exist
     if !Path::new(&conf.qemu_on_chip_bl_path).exists() {
@@ -85,13 +95,6 @@ fn parse_args() -> Vec<String> {
         std::process::exit(7);
     }
 
-    // Use run directory if provided
-    if cli_args.run_dir_name.is_some() {
-        unsafe {
-            RUN_DIR_NAME = Some(cli_args.run_dir_name.unwrap());
-        }
-    }
-
     // Create arguments to start QEMU with
     let mut qemu_args: Vec<String> = vec![env::args().next().unwrap()];
     #[cfg(feature = "multicore")]
@@ -125,4 +128,29 @@ fn parse_args() -> Vec<String> {
     ]);
 
     qemu_args
+}
+
+pub fn setup_logging() -> MultiMonitor<impl FnMut(&str)> {
+    let run_dir = &get_run_conf().unwrap().run_dir;
+    let mut log_dir = run_dir.clone();
+    log_dir.push("logs");
+    fs::create_dir_all(&log_dir).unwrap();
+    // Logging of LibAFL events
+    let mut log_libafl_path = log_dir.clone();
+    log_libafl_path.push("libafl.log");
+    let logfile = log_libafl_path;
+    let log = RefCell::new(
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(logfile)
+            .unwrap(),
+    );
+    // The stats reporter for the broker
+    let monitor = MultiMonitor::new(move |s| {
+        println!("{s}");
+        writeln!(log.borrow_mut(), "{s}").unwrap();
+    });
+    monitor
 }
