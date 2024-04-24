@@ -57,9 +57,9 @@ impl CustomMetadata {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct CustomMetadataFeedback {
-    emulator: u64,
+    emulator: Qemu,
 }
 
 impl<S> Feedback<S> for CustomMetadataFeedback
@@ -90,11 +90,10 @@ where
         _ot: &OT,
         testcase: &mut Testcase<S::Input>,
     ) -> Result<(), Error> {
-        let emu = unsafe { (self.emulator as *const Qemu).as_ref().unwrap() };
         // Read regs
         let mut regs = Vec::new();
         for r in Regs::iter() {
-            regs.push(emu.read_reg(r).unwrap());
+            regs.push(self.emulator.read_reg(r).unwrap());
         }
         testcase.add_metadata(CustomMetadata::new(regs));
         Ok(())
@@ -111,7 +110,7 @@ impl Named for CustomMetadataFeedback {
 impl CustomMetadataFeedback {
     /// Creates a new [`CustomMetadataFeedback`]
     #[must_use]
-    pub fn new(emulator: u64) -> Self {
+    pub fn new(emulator: Qemu) -> Self {
         Self { emulator }
     }
 }

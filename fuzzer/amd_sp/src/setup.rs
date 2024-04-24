@@ -3,6 +3,7 @@ use clap::{command, Parser};
 use libafl::monitors::MultiMonitor;
 use libasp::{borrow_global_conf, get_run_conf, init_global_conf};
 use std::io::Write;
+use std::sync::Mutex;
 use std::{
     cell::RefCell,
     env,
@@ -128,29 +129,4 @@ pub fn parse_args() -> Vec<String> {
     ]);
 
     qemu_args
-}
-
-pub fn setup_logging() -> MultiMonitor<impl FnMut(&str)> {
-    let run_dir = &get_run_conf().unwrap().run_dir;
-    let mut log_dir = run_dir.clone();
-    log_dir.push("logs");
-    fs::create_dir_all(&log_dir).unwrap();
-    // Logging of LibAFL events
-    let mut log_libafl_path = log_dir.clone();
-    log_libafl_path.push("libafl.log");
-    let logfile = log_libafl_path;
-    let log = RefCell::new(
-        OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(logfile)
-            .unwrap(),
-    );
-    // The stats reporter for the broker
-    let monitor = MultiMonitor::new(move |s| {
-        println!("{s}");
-        writeln!(log.borrow_mut(), "{s}").unwrap();
-    });
-    monitor
 }

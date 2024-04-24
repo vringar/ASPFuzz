@@ -14,16 +14,13 @@ use libafl_qemu::*;
 
 use libasp::*;
 
-use clap::Parser;
 use rangemap::RangeMap;
 
-use chrono::Local;
 use nix::unistd::dup2;
 #[cfg(not(feature = "multicore"))]
 use nix::{self, unistd::dup};
 use std::cell::RefCell;
 use std::env;
-use std::fmt::Debug;
 use std::fs;
 #[cfg(feature = "debug")]
 use std::fs::File;
@@ -32,26 +29,24 @@ use std::io;
 use std::io::Write;
 #[cfg(feature = "debug")]
 use std::os::unix::io::AsRawFd;
-#[cfg(feature = "debug")]
-use std::os::unix::io::FromRawFd;
-use std::path::{Path, PathBuf};
-use std::process::exit;
+use std::path::PathBuf;
 use std::ptr::addr_of_mut;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use crate::setup::parse_args;
 
 const ON_CHIP_ADDR: GuestAddr = 0xffff_0000;
 
-static mut EMULATOR: u64 = 0;
 static mut COUNTER_EDGE_HOOKS: usize = 0;
-static mut COUNTER_WRITE_HOOKS: usize = 0;
+static COUNTER_WRITE_HOOKS: AtomicU64 = AtomicU64::new(0);
 static mut COUNTER_SNAPSHOT: usize = 0;
 static mut CRASH_SNAPSHOT: bool = false;
 static mut FLASH_READ_HOOK_ID: usize = 0;
 
 fn gen_block_hook<QT, S>(
-    _hooks: &mut QemuHooks<QT, S>,
+    hooks: &mut QemuHooks<QT, S>,
     _id: Option<&mut S>,
     src: GuestAddr,
 ) -> Option<u64>
@@ -66,8 +61,7 @@ where
             log::debug!("> src: {:#x}", src);
             unsafe { COUNTER_EDGE_HOOKS += 1 };
             log::debug!("> id: {:#x}", unsafe { COUNTER_EDGE_HOOKS });
-            let emu = unsafe { (EMULATOR as *const Qemu).as_ref().unwrap() };
-            emu.current_cpu().unwrap().trigger_breakpoint();
+            hooks.qemu().current_cpu().unwrap().trigger_breakpoint();
             return Some(unsafe { COUNTER_EDGE_HOOKS } as u64);
         }
     }
@@ -82,12 +76,12 @@ where
     None
 }
 
-fn exec_block_hook<QT, S>(_hooks: &mut QemuHooks<QT, S>, data_maybe: Option<&mut S>, id: u64)
+fn exec_block_hook<QT, S>(hooks: &mut QemuHooks<QT, S>, data_maybe: Option<&mut S>, id: u64)
 where
     S: UsesInput,
     QT: QemuHelperTuple<S>,
 {
-    let emu = unsafe { (EMULATOR as *const Qemu).as_ref().unwrap() };
+    let emu = hooks.qemu();
     if unsafe { FLASH_READ_HOOK_ID } == id as usize {
         let conf = borrow_global_conf().unwrap();
         let cpu = emu.current_cpu().unwrap();
@@ -128,11 +122,9 @@ where
         }
         return;
     }
-    let data: u32 = todo!();
-
     log::debug!("Execute block:");
     log::debug!("> id: {}", id);
-    log::debug!("> data: {}", data);
+    log::debug!("> data: {}", (todo!() as u32));
     emu.current_cpu().unwrap().trigger_breakpoint();
 }
 
@@ -160,9 +152,9 @@ where
     log::debug!("Generate writes:");
     log::debug!("> src: {:#x}", src);
     log::debug!("> size: {}", size);
-    unsafe { COUNTER_WRITE_HOOKS += 1 };
-    log::debug!("> id: {:#x}", unsafe { COUNTER_WRITE_HOOKS });
-    return Some(unsafe { COUNTER_WRITE_HOOKS } as u64);
+    let hook_id = COUNTER_WRITE_HOOKS.fetch_add(1, Ordering::SeqCst);
+    log::debug!("> id: {:#x}", hook_id);
+    return Some(hook_id);
 }
 
 fn exec_writes_hook<QT: QemuHelperTuple<S>, S: UsesInput>(
@@ -171,15 +163,14 @@ fn exec_writes_hook<QT: QemuHelperTuple<S>, S: UsesInput>(
     id: u64,
     addr: GuestAddr,
 ) {
-    let data: u32 = todo!();
     let conf = borrow_global_conf().unwrap();
     for no_write in conf.crashes_mmap_no_write_hooks.iter() {
         if addr >= no_write.0 && addr < no_write.1 {
             log::debug!("Execute writes:");
             log::debug!("> id: {:#x}", id);
             log::debug!("> addr: {:#x}", addr);
-            log::debug!("> data: {}", data);
-            let emu = unsafe { (EMULATOR as *const Qemu).as_ref().unwrap() };
+            log::debug!("> data: {}", todo!() as u64);
+            let emu = hooks.qemu();
             emu.current_cpu().unwrap().trigger_breakpoint();
         }
     }
@@ -191,7 +182,6 @@ fn exec_writes_hook_n<QT: QemuHelperTuple<S>, S: UsesInput>(
     addr: u32,
     size: usize,
 ) {
-    let data: u32 = todo!();
     let conf = borrow_global_conf().unwrap();
     for no_write in conf.crashes_mmap_no_write_hooks.iter() {
         if addr >= no_write.0 && addr < no_write.1 {
@@ -199,9 +189,8 @@ fn exec_writes_hook_n<QT: QemuHelperTuple<S>, S: UsesInput>(
             log::debug!("> id: {:#x}", id);
             log::debug!("> addr: {:#x}", addr);
             log::debug!("> size: {}", size);
-            log::debug!("> data: {}", data);
-            let emu = unsafe { (EMULATOR as *const Qemu).as_ref().unwrap() };
-            emu.current_cpu().unwrap().trigger_breakpoint();
+            log::debug!("> data: {}", (todo!() as u32));
+            hooks.qemu().current_cpu().unwrap().trigger_breakpoint();
         }
     }
 }
@@ -222,10 +211,10 @@ fn print_input(input: &[u8]) {
     let mut last_no_print = false;
     loop {
         let mut word: [u8; 4] = [0; 4];
-        for i in 0..4 {
+        for (i, word) in word.iter_mut().enumerate() {
             let obyte = iter.next();
             match obyte {
-                Some(byte) => word[i] = *byte,
+                Some(&byte) => *word = byte,
                 None => {
                     last_byte = true;
                     if i == 0 {
@@ -249,10 +238,10 @@ fn print_input(input: &[u8]) {
             break;
         }
         if counter % 4 == 0 {
-            out_str.push_str(&format!("\n"));
+            out_str.push('\n');
         }
     }
-    out_str.push_str(&format!("\n]"));
+    out_str.push_str("\n]");
 
     log::info!("{}", out_str);
 }
@@ -264,12 +253,11 @@ fn run(qemu_args: Vec<String>) {
     let conf = borrow_global_conf().unwrap();
 
     // Create directory for this run
-    let date = Local::now();
     let run_dir = &get_run_conf().unwrap().run_dir;
-    if !env::var("AFL_LAUNCHER_CLIENT".to_string()).is_ok() && run_dir.exists() {
-        fs::remove_dir_all(&run_dir).unwrap();
+    if env::var("AFL_LAUNCHER_CLIENT").is_err() && run_dir.exists() {
+        fs::remove_dir_all(run_dir).unwrap();
     }
-    fs::create_dir_all(&run_dir).unwrap();
+    fs::create_dir_all(run_dir).unwrap();
     let mut input_dir = run_dir.clone();
     input_dir.push("inputs");
     fs::create_dir_all(&input_dir).unwrap();
@@ -281,7 +269,7 @@ fn run(qemu_args: Vec<String>) {
     fs::create_dir_all(&solutions_dir).unwrap();
     let mut config_path = run_dir.clone();
     config_path.push("config.yaml");
-    if !env::var("AFL_LAUNCHER_CLIENT".to_string()).is_ok() {
+    if env::var("AFL_LAUNCHER_CLIENT").is_err() {
         fs::copy(&conf.config_file, &config_path).unwrap();
     }
 
@@ -456,11 +444,11 @@ fn run(qemu_args: Vec<String>) {
                 feedback_or!(CrashFeedback::new(), ExceptionFeedback::new()),
                 objective_coverage_feedback
             ),
-            CustomMetadataFeedback::new(unsafe { EMULATOR }) // always true, used to write metadata output whenever a test-case is a solution
+            CustomMetadataFeedback::new(emu) // always true, used to write metadata output whenever a test-case is a solution
         );
 
         // create a State from scratch
-        let mut cloned_solutions_dir = solutions_dir.clone();
+        let cloned_solutions_dir = solutions_dir.clone();
         let mut state = state.unwrap_or_else(|| {
             StdState::new(
                 // RNG
@@ -589,7 +577,7 @@ fn run(qemu_args: Vec<String>) {
 
         // Launcher config
         let broker_port = 1337;
-        let num_cores = get_run_conf().unwrap().num_cores - 1;
+        let num_cores = get_run_conf().unwrap().num_cores;
         let cores = Cores::from_cmdline(&format!("0-{num_cores}")).unwrap();
 
         // Build and run a Launcher
