@@ -5,7 +5,7 @@ authors = ["Patrick Gersch"]
 edition = "2018"
 
 [features]
-default = ["std", "multicore"]
+default = ["std", "multicore", "debug"]
 std = []
 
 # Fuzzer performance measurement feature

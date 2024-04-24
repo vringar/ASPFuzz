@@ -1,6 +1,9 @@
 use libafl::prelude::*;
+use libafl_bolts::core_affinity::Cores;
 use libafl_bolts::current_nanos;
 use libafl_bolts::rands::StdRand;
+use libafl_bolts::shmem::ShMemProvider;
+use libafl_bolts::shmem::StdShMemProvider;
 use libafl_bolts::tuples::tuple_list;
 use libafl_bolts::AsSlice;
 use libafl_qemu::drcov::QemuDrCovHelper;
@@ -22,20 +25,21 @@ use std::cell::RefCell;
 use std::env;
 use std::fmt::Debug;
 use std::fs;
-#[cfg(not(feature = "multicore"))]
+#[cfg(feature = "debug")]
 use std::fs::File;
 use std::fs::OpenOptions;
-#[cfg(not(feature = "multicore"))]
 use std::io;
 use std::io::Write;
-#[cfg(not(feature = "multicore"))]
+#[cfg(feature = "debug")]
 use std::os::unix::io::AsRawFd;
-#[cfg(not(feature = "multicore"))]
+#[cfg(feature = "debug")]
 use std::os::unix::io::FromRawFd;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::ptr::addr_of_mut;
 use std::time::Duration;
+
+use crate::setup::parse_args;
 
 const ON_CHIP_ADDR: GuestAddr = 0xffff_0000;
 
@@ -45,9 +49,6 @@ static mut COUNTER_WRITE_HOOKS: usize = 0;
 static mut COUNTER_SNAPSHOT: usize = 0;
 static mut CRASH_SNAPSHOT: bool = false;
 static mut FLASH_READ_HOOK_ID: usize = 0;
-static mut RUN_DIR_NAME: Option<String> = None;
-#[cfg(feature = "multicore")]
-static mut NUM_CORES: Option<u32> = None;
 
 fn gen_block_hook<QT, S>(
     _hooks: &mut QemuHooks<QT, S>,
@@ -256,19 +257,15 @@ fn print_input(input: &[u8]) {
     log::info!("{}", out_str);
 }
 
-extern "C" fn on_vcpu(mut cpu: CPU) {
-    let emu = cpu.qemu();
+fn run(qemu_args: Vec<String>) {
+    let env: Vec<(String, String)> = env::vars().collect();
+
+    let emu = Qemu::init(&qemu_args, &env).unwrap();
     let conf = borrow_global_conf().unwrap();
 
     // Create directory for this run
     let date = Local::now();
-    let run_dir = if unsafe { RUN_DIR_NAME.as_ref().is_some() } {
-        PathBuf::from(format!("runs/{}", unsafe {
-            RUN_DIR_NAME.as_ref().unwrap()
-        }))
-    } else {
-        PathBuf::from(format!("runs/{}", date.format("%Y-%m-%d_%H:%M")))
-    };
+    let run_dir = &get_run_conf().unwrap().run_dir;
     if !env::var("AFL_LAUNCHER_CLIENT".to_string()).is_ok() && run_dir.exists() {
         fs::remove_dir_all(&run_dir).unwrap();
     }
@@ -331,9 +328,14 @@ extern "C" fn on_vcpu(mut cpu: CPU) {
 
     // Go to FUZZ_START
     emu.set_breakpoint(conf.harness_start);
-    unsafe { emu.run() };
+    unsafe {
+        match emu.run() {
+            Ok(QemuExitReason::Breakpoint(_)) => {}
+            _ => panic!("Unexpected QEMU exit."),
+        }
+    };
     emu.remove_breakpoint(conf.harness_start);
-    cpu = emu.current_cpu().unwrap(); // ctx switch safe
+    let mut cpu = emu.current_cpu().unwrap(); // ctx switch safe
     let pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
     log::debug!("#### First exit at {:#x} ####", pc);
 
@@ -343,7 +345,7 @@ extern "C" fn on_vcpu(mut cpu: CPU) {
     eh.start(&emu);
     // Setup tunnels cmps
     for cmp in &conf.tunnels_cmps {
-        add_tunnels_cmp((*cmp).0, &(*cmp).1, &emu);
+        add_tunnels_cmp(cmp.0, &cmp.1, &emu);
     }
     // Setup crash breakpoints
     for bp in &conf.crashes_breakpoints {
@@ -391,7 +393,7 @@ extern "C" fn on_vcpu(mut cpu: CPU) {
 
         // Fixed values to memory
         for fixed in conf.input_fixed.iter() {
-            let buffer = unsafe { std::mem::transmute::<u32, [u8; 4]>(fixed.1) };
+            let buffer = fixed.1.to_ne_bytes();
             unsafe {
                 write_flash_mem(fixed.0, &buffer);
             }
@@ -400,7 +402,11 @@ extern "C" fn on_vcpu(mut cpu: CPU) {
         // Start the emulation
         let mut pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
         log::debug!("Start at {:#x}", pc);
-        unsafe { emu.run() };
+        unsafe {
+            if let Err(e) = emu.run() {
+                log::error!("{:#?}", e)
+            }
+        };
 
         // After the emulator finished
         pc = cpu.read_reg(Regs::Pc).unwrap();
@@ -441,7 +447,7 @@ extern "C" fn on_vcpu(mut cpu: CPU) {
         // Feedback to rate the interestingness of an input
         let mut feedback = MaxMapFeedback::new(&edges_observer);
 
-        let mut objective_coverage_feedback =
+        let objective_coverage_feedback =
             MaxMapFeedback::with_name("objective_coverage_feedback", &edges_observer);
 
         // A feedback to choose if an input is a solution or not
@@ -583,7 +589,7 @@ extern "C" fn on_vcpu(mut cpu: CPU) {
 
         // Launcher config
         let broker_port = 1337;
-        let num_cores = unsafe { NUM_CORES.as_ref().unwrap() } - 1;
+        let num_cores = get_run_conf().unwrap().num_cores - 1;
         let cores = Cores::from_cmdline(&format!("0-{num_cores}")).unwrap();
 
         // Build and run a Launcher
@@ -620,23 +626,9 @@ extern "C" fn on_vcpu(mut cpu: CPU) {
     }
 }
 
-
-
 pub fn fuzz() {
     env_logger::init();
-    let env: Vec<(String, String)> = env::vars().collect();
-
     // Generate QEMU start arguments
     let qemu_args = parse_args();
-
-    // Setup QEMU
-    let emu = Qemu::init(&qemu_args, &env).unwrap();
-    unsafe {
-        EMULATOR = &emu as *const _ as u64;
-    }
-
-    // Start QEMU
-    unsafe {
-        emu.run().unwrap();
-    }
+    run(qemu_args)
 }
