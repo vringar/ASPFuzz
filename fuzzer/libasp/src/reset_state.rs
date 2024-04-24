@@ -126,8 +126,8 @@ impl ResetState {
     /* Super lazy reset */
     fn load_super_lazy(&self, emu: &Qemu) {
         // Resetting registers
-        for (r, v) in self.regs.iter().enumerate() {
-            emu.write_reg(r as i32, *v).unwrap();
+        for (r, v) in Regs::iter().zip(self.regs.iter()) {
+            emu.write_reg(r, *v).unwrap();
         }
     }
 

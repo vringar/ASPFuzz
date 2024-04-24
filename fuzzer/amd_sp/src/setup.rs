@@ -1,13 +1,10 @@
 use chrono::Local;
 use clap::{command, Parser};
-use libafl::monitors::MultiMonitor;
-use libasp::{borrow_global_conf, get_run_conf, init_global_conf};
-use std::io::Write;
-use std::sync::Mutex;
+
+use libasp::{borrow_global_conf, init_global_conf};
+
 use std::{
-    cell::RefCell,
     env,
-    fs::{self, OpenOptions},
     path::{Path, PathBuf},
     process::exit,
 };

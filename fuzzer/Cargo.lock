@@ -409,6 +409,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctor"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "edb49164822f3ee45b17acd4a208cfc1251410cf0cad9a833234c9890774dd9f"
+dependencies = [
+ "quote",
+ "syn 2.0.60",
+]
+
+[[package]]
 name = "dashmap"
 version = "5.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -737,15 +747,18 @@ version = "0.12.0"
 dependencies = [
  "ahash",
  "backtrace",
+ "ctor",
  "erased-serde",
  "hashbrown",
  "hostname",
  "libafl_derive",
  "libc",
  "log",
+ "miniz_oxide",
  "nix 0.27.1",
  "num_enum",
  "postcard",
+ "rand_core",
  "rustversion",
  "serde",
  "serde_json",
@@ -755,6 +768,7 @@ dependencies = [
  "uds",
  "uuid",
  "windows",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -1133,6 +1147,12 @@ checksum = "0fa76aaf39101c457836aec0ce2316dbdc3ab723cdda1c6bd4e6ad4208acaca7"
 dependencies = [
  "proc-macro2",
 ]
+
+[[package]]
+name = "rand_core"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 
 [[package]]
 name = "rangemap"
@@ -1786,6 +1806,12 @@ checksum = "f593a95398737aeed53e489c785df13f3618e41dbcd6718c6addbf1395aa6876"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "927da81e25be1e1a2901d59b81b37dd2efd1fc9c9345a55007f09bf5a2d3ee03"
 
 [[package]]
 name = "yaml-rust"

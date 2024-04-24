@@ -9,9 +9,7 @@ resolver = "2"
 libafl = { path = "../LibAFL/libafl/", default-features = false, features = [
     "prelude",
 ] }
-libafl_bolts = { path = "../LibAFL/libafl_bolts/", default-features = false, features = [
-    "prelude",
-] }
+libafl_bolts = { path = "../LibAFL/libafl_bolts/"}
 libafl_qemu = { path = "../LibAFL/libafl_qemu/", features = [
     "arm",
     "systemmode",

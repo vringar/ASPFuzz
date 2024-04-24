@@ -1,6 +1,7 @@
 use libafl::prelude::*;
 use libafl_bolts::core_affinity::Cores;
 use libafl_bolts::current_nanos;
+use libafl_bolts::current_time;
 use libafl_bolts::rands::StdRand;
 use libafl_bolts::shmem::ShMemProvider;
 use libafl_bolts::shmem::StdShMemProvider;
@@ -16,18 +17,15 @@ use libasp::*;
 
 use rangemap::RangeMap;
 
-use nix::unistd::dup2;
-#[cfg(not(feature = "multicore"))]
 use nix::{self, unistd::dup};
 use std::cell::RefCell;
 use std::env;
 use std::fs;
-#[cfg(feature = "debug")]
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io;
 use std::io::Write;
-#[cfg(feature = "debug")]
+use std::os::fd::FromRawFd;
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 use std::ptr::addr_of_mut;
@@ -76,7 +74,7 @@ where
     None
 }
 
-fn exec_block_hook<QT, S>(hooks: &mut QemuHooks<QT, S>, data_maybe: Option<&mut S>, id: u64)
+fn exec_block_hook<QT, S>(hooks: &mut QemuHooks<QT, S>, _data_maybe: Option<&mut S>, id: u64)
 where
     S: UsesInput,
     QT: QemuHelperTuple<S>,
@@ -124,14 +122,14 @@ where
     }
     log::debug!("Execute block:");
     log::debug!("> id: {}", id);
-    log::debug!("> data: {}", (todo!() as u32));
+    // log::debug!("> data: {}", (todo!() as u32));
     emu.current_cpu().unwrap().trigger_breakpoint();
 }
 
 fn gen_writes_hook<QT, S>(
     _hooks: &mut QemuHooks<QT, S>,
-    _id: Option<&mut S>,
-    src: GuestAddr,
+    _state: Option<&mut S>,
+    pc: GuestAddr,
     _: *mut TCGTemp,
     mem_acces_info: MemAccessInfo,
 ) -> Option<u64>
@@ -139,22 +137,24 @@ where
     S: UsesInput,
     QT: QemuHelperTuple<S>,
 {
+    // TODO: for known write locations at "compile" time
+    // Don't emit hooks if they are outside of range
     let conf = borrow_global_conf().unwrap();
-    for no_write in conf.crashes_mmap_no_write_hooks.iter() {
-        for no_ldr in &no_write.2 {
-            if src == *no_ldr {
-                log::debug!("Skipping generation hook for {:#010x}", src);
+    for (_, _, no_write) in conf.crashes_mmap_no_write_hooks.iter() {
+        for no_ldr in no_write {
+            if pc == *no_ldr {
+                log::debug!("Skipping generation hook for {:#010x}", pc);
                 return None;
             }
         }
     }
     let size = mem_acces_info.size();
     log::debug!("Generate writes:");
-    log::debug!("> src: {:#x}", src);
+    log::debug!("> src: {:#x}", pc);
     log::debug!("> size: {}", size);
     let hook_id = COUNTER_WRITE_HOOKS.fetch_add(1, Ordering::SeqCst);
     log::debug!("> id: {:#x}", hook_id);
-    return Some(hook_id);
+    Some(hook_id)
 }
 
 fn exec_writes_hook<QT: QemuHelperTuple<S>, S: UsesInput>(
@@ -164,12 +164,12 @@ fn exec_writes_hook<QT: QemuHelperTuple<S>, S: UsesInput>(
     addr: GuestAddr,
 ) {
     let conf = borrow_global_conf().unwrap();
-    for no_write in conf.crashes_mmap_no_write_hooks.iter() {
-        if addr >= no_write.0 && addr < no_write.1 {
+    for &(lower_bound, upper_bound, _) in conf.crashes_mmap_no_write_hooks.iter() {
+        if addr >= lower_bound && addr < upper_bound {
             log::debug!("Execute writes:");
             log::debug!("> id: {:#x}", id);
             log::debug!("> addr: {:#x}", addr);
-            log::debug!("> data: {}", todo!() as u64);
+            // log::debug!("> data: {}", todo!() as u64);
             let emu = hooks.qemu();
             emu.current_cpu().unwrap().trigger_breakpoint();
         }
@@ -177,7 +177,7 @@ fn exec_writes_hook<QT: QemuHelperTuple<S>, S: UsesInput>(
 }
 fn exec_writes_hook_n<QT: QemuHelperTuple<S>, S: UsesInput>(
     hooks: &mut QemuHooks<QT, S>,
-    input: Option<&mut S>,
+    _input: Option<&mut S>,
     id: u64,
     addr: u32,
     size: usize,
@@ -189,7 +189,7 @@ fn exec_writes_hook_n<QT: QemuHelperTuple<S>, S: UsesInput>(
             log::debug!("> id: {:#x}", id);
             log::debug!("> addr: {:#x}", addr);
             log::debug!("> size: {}", size);
-            log::debug!("> data: {}", (todo!() as u32));
+            // log::debug!("> data: {}", (todo!() as u32));
             hooks.qemu().current_cpu().unwrap().trigger_breakpoint();
         }
     }
@@ -281,29 +281,6 @@ fn run(qemu_args: Vec<String>) {
         conf.input_total_size,
         input_dir,
     );
-
-    // Catching stdout/stderr
-    #[cfg(not(feature = "multicore"))]
-    let mut stdout_cpy = unsafe {
-        let new_fd = dup(io::stdout().as_raw_fd()).unwrap();
-        File::from_raw_fd(new_fd)
-    };
-    #[cfg(all(not(feature = "debug"), not(feature = "multicore")))]
-    {
-        let file_null = File::open("/dev/null").unwrap();
-        let null_fd = file_null.as_raw_fd();
-        dup2(null_fd, io::stdout().as_raw_fd()).unwrap();
-        dup2(null_fd, io::stderr().as_raw_fd()).unwrap();
-    }
-    #[cfg(feature = "debug")]
-    {
-        let mut log_run_path = log_dir.clone();
-        log_run_path.push("run.log");
-        let runfile = File::create(log_run_path).unwrap();
-        let run_fd = runfile.as_raw_fd();
-        dup2(run_fd, io::stdout().as_raw_fd()).unwrap();
-        dup2(run_fd, io::stderr().as_raw_fd()).unwrap();
-    }
 
     // Configure ResetState and ExceptionHandler helpers
     let mut rs = ResetState::new(conf.qemu_sram_size);
@@ -551,29 +528,35 @@ fn run(qemu_args: Vec<String>) {
         Ok(())
     };
 
+    // BEGIN Logging
     // Logging of LibAFL events
     let mut log_libafl_path = log_dir.clone();
     log_libafl_path.push("libafl.log");
     let logfile = log_libafl_path;
+
     let log = RefCell::new(
         OpenOptions::new()
-            .write(true)
+            .append(true)
             .create(true)
-            .truncate(true)
             .open(logfile)
             .unwrap(),
     );
 
-    #[cfg(feature = "multicore")]
+    let stdout_cpy = RefCell::new(unsafe {
+        let new_fd = dup(io::stdout().as_raw_fd()).unwrap();
+        File::from_raw_fd(new_fd)
+    });
+    // The stats reporter for the broker
+    let monitor = MultiMonitor::new(|s| {
+        writeln!(stdout_cpy.borrow_mut(), "{s}").unwrap();
+        writeln!(log.borrow_mut(), "{:?} {}", current_time(), s).unwrap();
+    });
+
+    // END Logging
     {
         // The shared memory allocator
         let shmem_provider = StdShMemProvider::new().expect("Failed to init shared memory");
-
-        // The stats reporter for the broker
-        let monitor = MultiMonitor::new(|s| {
-            println!("{s}");
-            writeln!(log.borrow_mut(), "{s}").unwrap();
-        });
+        // Catching stdout/stderr
 
         // Launcher config
         let broker_port = 1337;
@@ -598,20 +581,19 @@ fn run(qemu_args: Vec<String>) {
         }
     }
 
-    #[cfg(not(feature = "multicore"))]
-    {
-        // The Monitor trait define how the fuzzer stats are displayed to the user
-        let mon = SimpleMonitor::new(|s| {
-            writeln!(&mut stdout_cpy, "{s}").unwrap();
-            writeln!(log.borrow_mut(), "{s}").unwrap();
-        });
+    // {
+    //     // The Monitor trait define how the fuzzer stats are displayed to the user
+    //     let mon = SimpleMonitor::new(|s| {
+    //         writeln!(&mut stdout_cpy, "{s}").unwrap();
+    //         writeln!(log.borrow_mut(), "{s}").unwrap();
+    //     });
 
-        // The event manager handle the various events generated during the fuzzing loop
-        // such as the notification of the addition of a new item to the corpus
-        let mgr = SimpleEventManager::new(mon);
+    //     // The event manager handle the various events generated during the fuzzing loop
+    //     // such as the notification of the addition of a new item to the corpus
+    //     let mgr = SimpleEventManager::new(mon);
 
-        run_client(None, mgr, 1).expect("Client closure failed");
-    }
+    //     run_client(None, mgr, 1).expect("Client closure failed");
+    // }
 }
 
 pub fn fuzz() {
