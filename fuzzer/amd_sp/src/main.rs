@@ -3,6 +3,8 @@ mod fuzzer;
 #[cfg(all(target_os = "linux", feature = "performance"))]
 mod performance;
 mod setup;
+mod client;
+mod harness;
 
 #[cfg(target_os = "linux")]
 pub fn main() {
