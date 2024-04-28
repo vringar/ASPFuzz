@@ -25,12 +25,6 @@ use crate::setup::parse_args;
 
 pub const ON_CHIP_ADDR: GuestAddr = 0xffff_0000;
 
-static mut COUNTER_EDGE_HOOKS: usize = 0;
-static mut COUNTER_SNAPSHOT: usize = 0;
-static mut CRASH_SNAPSHOT: bool = false;
-
-
-
 fn run(qemu_args: Vec<String>) {
     let env: Vec<(String, String)> = env::vars().collect();
 
