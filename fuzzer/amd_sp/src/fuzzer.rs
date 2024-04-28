@@ -292,10 +292,11 @@ fn run(qemu_args: Vec<String>) {
     }
 
     // Go to FUZZ_START
-    emu.set_breakpoint(conf.harness_start);
+    let addr = conf.harness_start;
+    emu.set_breakpoint(addr);
     unsafe {
         match emu.run() {
-            Ok(QemuExitReason::Breakpoint(_)) => {}
+            Ok(QemuExitReason::Breakpoint(guest_addr)) => { assert_eq!(guest_addr,conf.harness_start); println!("Guest addr: {guest_addr}, Conf harness: {addr}")}
             _ => panic!("Unexpected QEMU exit."),
         }
     };

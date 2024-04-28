@@ -17,5 +17,7 @@ libafl_qemu = { path = "../LibAFL/libafl_qemu/", features = [
 
 [profile.dev]
 debug = true
+debug-assertions = true
 [profile.release]
 debug = true
+debug-assertions = true
