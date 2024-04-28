@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use libafl::prelude::*;
 use libafl_bolts::{impl_serdeany, Named};
 /// Generating metadata whenever a test-case is an objective
@@ -102,8 +104,8 @@ where
 
 impl Named for CustomMetadataFeedback {
     #[inline]
-    fn name(&self) -> &str {
-        "CustomMetadataFeedback"
+    fn name(&self) -> &Cow<'static, str> {
+        &Cow::Borrowed("CustomMetadataFeedback")
     }
 }
 
