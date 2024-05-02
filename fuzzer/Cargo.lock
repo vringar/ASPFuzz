@@ -791,6 +791,7 @@ dependencies = [
  "hashbrown",
  "libafl",
  "libafl_bolts",
+ "libafl_qemu_build",
  "libafl_qemu_sys",
  "libafl_targets",
  "libc",
@@ -831,6 +832,7 @@ dependencies = [
  "libc",
  "num_enum",
  "paste",
+ "rustversion",
  "strum",
  "strum_macros",
 ]
