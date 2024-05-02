@@ -12,7 +12,7 @@ use std::{
     path::PathBuf,
     ptr::addr_of_mut,
     sync::{
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicU64, Ordering},
         OnceLock,
     },
     time::Duration,
@@ -45,7 +45,7 @@ where
 
     if !conf.crashes_mmap_no_write_flash_fn.is_empty() && conf.crashes_mmap_flash_read_fn == src {
         log::debug!("Adding block hook for flash_read_fn");
-        FLASH_READ_HOOK_ID.set(id);
+        let _ = FLASH_READ_HOOK_ID.set(id);
         return Some(id);
     }
     None
@@ -296,12 +296,19 @@ where
     )
     .unwrap();
 
-    state
-        .load_initial_inputs_forced(&mut fuzzer, &mut executor, &mut mgr, &[input_dir.clone()])
-        .unwrap_or_else(|_| {
-            println!("Failed to load initial corpus at {:?}", &input_dir);
-            std::process::exit(0);
-        });
+    if state.must_load_initial_inputs() {
+        state
+            .load_initial_inputs(&mut fuzzer, &mut executor, &mut mgr, &[input_dir.clone()])
+            .unwrap_or_else(|_| {
+                println!("Failed to load initial corpus at {:?}", &input_dir);
+                std::process::exit(0);
+            });
+        println!(
+            "We imported {} inputs from {:?}.",
+            state.corpus().count(),
+            &input_dir
+        );
+    }
 
     // Setup a mutational stage with a basic bytes mutator
     let mutator = StdScheduledMutator::new(havoc_mutations());
