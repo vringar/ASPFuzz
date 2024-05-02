@@ -21,9 +21,10 @@
       # create a Rust environment
       (
         self: super: {
-          rustToolchain = super.rust-bin.stable.latest.default.override {
-            extensions = ["rust-src" "llvm-tools-preview"];
-          };
+          rustToolchain = super.rust-bin.selectLatestNightlyWith (toolchain:
+            toolchain.default.override {
+              extensions = ["rust-src" "llvm-tools-preview"];
+            });
         }
       )
     ];
