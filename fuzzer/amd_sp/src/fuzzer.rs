@@ -18,7 +18,6 @@ use std::os::fd::FromRawFd;
 use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 
-
 use crate::client;
 use crate::harness;
 use crate::setup::parse_args;
@@ -75,7 +74,10 @@ fn run(qemu_args: Vec<String>) {
     emu.set_breakpoint(addr);
     unsafe {
         match emu.run() {
-            Ok(QemuExitReason::Breakpoint(guest_addr)) => { assert_eq!(guest_addr,conf.harness_start); println!("Guest addr: {guest_addr}, Conf harness: {addr}")}
+            Ok(QemuExitReason::Breakpoint(guest_addr)) => {
+                assert_eq!(guest_addr, conf.harness_start);
+                println!("Guest addr: {guest_addr}, Conf harness: {addr}")
+            }
             _ => panic!("Unexpected QEMU exit."),
         }
     };
@@ -101,7 +103,15 @@ fn run(qemu_args: Vec<String>) {
     let harness = harness::create_harness(rs, emu);
 
     let mut run_client = |state: Option<_>, mgr, _core_id| -> Result<(), Error> {
-        client::run_client(emu, state, solutions_dir.clone(), log_dir.clone(), input_dir.clone(), mgr, harness.clone() )
+        client::run_client(
+            emu,
+            state,
+            solutions_dir.clone(),
+            log_dir.clone(),
+            input_dir.clone(),
+            mgr,
+            harness.clone(),
+        )
     };
 
     // BEGIN Logging
@@ -111,7 +121,6 @@ fn run(qemu_args: Vec<String>) {
         log_libafl_path.push("libafl.log");
         log_libafl_path
     };
-    
 
     let log = RefCell::new(
         OpenOptions::new()
@@ -152,15 +161,13 @@ fn run(qemu_args: Vec<String>) {
             .monitor(monitor)
             .run_client(&mut run_client)
             .cores(&cores)
-            .stdout_file(Some(
-                std_out_path.to_str().unwrap()
-            ))
+            .stdout_file(Some(std_out_path.to_str().unwrap()))
             .build()
             .launch()
         {
             Ok(()) => (),
             Err(Error::ShuttingDown) => println!("Fuzzing stopped by user. Good bye."),
-            Err(err) => panic!("Failed to run launcher: {:?}", err),
+            Err(err) => panic!("Failed to run launcher: {:#?}", err),
         }
     }
 

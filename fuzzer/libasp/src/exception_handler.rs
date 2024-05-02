@@ -3,10 +3,10 @@ use libafl::prelude::*;
 use libafl_qemu::*;
 
 use core::fmt::Debug;
-use std::borrow::Cow;
 use libafl_bolts::Named;
 use log;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
 #[derive(Copy, Clone)]
 pub enum ExceptionType {
