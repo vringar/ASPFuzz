@@ -18,8 +18,8 @@ impl InitialInput {
 
     pub fn create_initial_inputs(
         &self,
-        flash_base: &Vec<String>,
-        input_mem: &Vec<(GuestAddr, usize)>,
+        flash_base: &[String],
+        input_mem: &[(GuestAddr, usize)],
         flash_size: GuestAddr,
         input_total_size: usize,
         input_dir: PathBuf,

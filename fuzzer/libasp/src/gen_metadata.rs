@@ -104,7 +104,7 @@ where
 
 impl Named for CustomMetadataFeedback {
     #[inline]
-    fn name(&self) -> &Cow<'static, str> {
+    fn name(&self) -> &Cow<'static,str> {
         &Cow::Borrowed("CustomMetadataFeedback")
     }
 }

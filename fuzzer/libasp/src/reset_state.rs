@@ -10,6 +10,7 @@ use std::str::FromStr;
 const SRAM_START: GuestAddr = 0x0;
 const LAZY_SRAM_SIZE: GuestAddr = 0x1300;
 
+#[derive(Clone)]
 pub struct ResetState {
     saved: bool,
     sram_size: GuestAddr,

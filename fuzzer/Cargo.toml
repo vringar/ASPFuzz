@@ -8,6 +8,7 @@ resolver = "2"
 [workspace.dependencies]
 libafl = { path = "../LibAFL/libafl/", default-features = false, features = [
     "prelude",
+    "fork"
 ] }
 libafl_bolts = { path = "../LibAFL/libafl_bolts/"}
 libafl_qemu = { path = "../LibAFL/libafl_qemu/", features = [

@@ -1,7 +1,7 @@
-use std::{cell::OnceCell, path::PathBuf, ptr::addr_of_mut, sync::{atomic::{AtomicU64, AtomicUsize, Ordering}, OnceLock}, time::Duration};
+use std::{path::PathBuf, ptr::addr_of_mut, sync::{atomic::{AtomicU64, AtomicUsize, Ordering}, OnceLock}, time::Duration};
 use libafl::prelude::*;
 use libafl_bolts::prelude::*;
-use libafl_qemu::{edges::{edges_map_mut_slice, MAX_EDGES_NUM}, sys::TCGTemp, GuestAddr, Hook, MemAccessInfo, Qemu, QemuDrCovHelper, QemuEdgeCoverageHelper, QemuExecutor, QemuHelperTuple, QemuHooks, QemuInstrumentationAddressRangeFilter, Regs};
+use libafl_qemu::{ edges::{edges_map_mut_ptr, EDGES_MAP_SIZE_IN_USE, MAX_EDGES_FOUND}, sys::TCGTemp, GuestAddr, Hook, MemAccessInfo, Qemu, QemuDrCovHelper, QemuEdgeCoverageHelper, QemuExecutor, QemuHelperTuple, QemuHooks, QemuInstrumentationAddressRangeFilter, Regs};
 use libasp::{borrow_global_conf, get_run_conf, CustomMetadataFeedback, ExceptionFeedback};
 use rangemap::RangeMap;
 
@@ -169,8 +169,8 @@ SP: ShMemProvider{
             let edges_observer = unsafe {
                 HitcountsMapObserver::new(VariableMapObserver::from_mut_slice(
                     "edges",
-                    edges_map_mut_slice(),
-                    addr_of_mut!(MAX_EDGES_NUM),
+                    OwnedMutSlice::from_raw_parts_mut(edges_map_mut_ptr(), EDGES_MAP_SIZE_IN_USE),
+                    addr_of_mut!(MAX_EDGES_FOUND),
                 ))
                 .track_indices()
             };
