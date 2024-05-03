@@ -57,19 +57,18 @@
             cargo-make
             gcc-arm-embedded
             git
-            clang
-            clang_17
-            libcxx
+            llvmPackages_18.clang
+            llvmPackages_18.libcxx
             pkg-config
             zsh
 
             # QEMU Libraries
             glib
             libgcrypt
-            libclang
+            llvmPackages_18.libclang
             rust-bindgen-unwrapped
             libgit2
-            libllvm
+            llvmPackages_18.libllvm
 
             meson
             ninja
@@ -86,9 +85,9 @@
             openssl
           ])
           ++ pkgs.lib.optionals pkgs.stdenv.isDarwin (with pkgs; [libiconv]);
-        LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-        CC = "${pkgs.clang.out}/clang";
-        CXX = "${pkgs.clang.out}/clang++";
+        LIBCLANG_PATH = "${pkgs.llvmPackages_18.libclang.lib}/lib";
+        CC = "${pkgs.llvmPackages_18.clang.out}/clang";
+        CXX = "${pkgs.llvmPackages_18.clang.out}/clang++";
       };
     });
   };
