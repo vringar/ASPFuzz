@@ -142,6 +142,8 @@ fn run(qemu_args: Vec<String>) {
     });
     let mut std_out_path = log_dir.clone();
     std_out_path.push("stdout.log");
+    let mut std_err_path = log_dir.clone();
+    std_err_path.push("env_logger.log");
     // END Logging
     {
         // The shared memory allocator
@@ -152,7 +154,6 @@ fn run(qemu_args: Vec<String>) {
         let num_cores = get_run_conf().unwrap().num_cores;
         let cores = Cores::from_cmdline(&format!("0-{num_cores}")).unwrap();
 
-        // Option<StdState<BytesInput, InMemoryCorpus<BytesInput>, RomuDuoJrRand, CachedOnDiskCorpus<BytesInput>>>, LlmpRestartingEventManager<(), StdState<BytesInput, InMemoryCorpus<BytesInput>, RomuDuoJrRand, CachedOnDiskCorpus<BytesInput>>, CommonUnixShMemProvider>, CoreId
         // Build and run a Launcher
         match Launcher::builder()
             .shmem_provider(shmem_provider)
@@ -162,6 +163,7 @@ fn run(qemu_args: Vec<String>) {
             .run_client(&mut run_client)
             .cores(&cores)
             .stdout_file(Some(std_out_path.to_str().unwrap()))
+            .stderr_file(Some(std_err_path.to_str().unwrap()))
             .build()
             .launch()
         {
@@ -174,7 +176,7 @@ fn run(qemu_args: Vec<String>) {
     // {
     //     // The Monitor trait define how the fuzzer stats are displayed to the user
     //     let mon = SimpleMonitor::new(|s| {
-    //         writeln!(&mut stdout_cpy, "{s}").unwrap();
+    //         writeln!(stdout_cpy.borrow_mut(), "{s}").unwrap();
     //         writeln!(log.borrow_mut(), "{s}").unwrap();
     //     });
 
