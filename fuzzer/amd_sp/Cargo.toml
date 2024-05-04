@@ -5,15 +5,11 @@ authors = ["Patrick Gersch"]
 edition = "2018"
 
 [features]
-default = ["std", "multicore", "debug"]
+default = ["std"]
 std = []
 
 # Fuzzer performance measurement feature
 performance = []
-
-# Fuzzer features
-debug = []
-multicore = []
 
 [dependencies]
 libafl = { workspace = true}

@@ -8,34 +8,17 @@ RUST_LOG_STYLE="never"
 [tasks.unsupported]
 script_runner="@shell"
 script='''
-echo "Qemu fuzzer not supported on windows/mac"
+echo "Qemu fuzzer not supported on windows"
 '''
 
-[tasks.fuzzer]
-linux_alias = "fuzzer_unix"
-mac_alias = "fuzzer_unix"
+[tasks.build]
+linux_alias = "build_unix"
+mac_alias = "build_unix"
 windows_alias = "unsupported"
 
-[tasks.fuzzer_unix]
+[tasks.build_unix]
 command = "cargo"
 args = ["build", "--release"]
-
-# Run the fuzzer in multicore mode
-[tasks.run_fast]
-linux_alias = "run_fast_unix"
-mac_alias = "run_fast_unix"
-windows_alias = "unsupported"
-
-[tasks.run_fast_unix]
-env = { "RUST_LOG" = "off" }
-command = "cargo"
-args = [
-    "run", "--release",
-    "--features", "multicore",
-    "--",
-    "${@}",
-]
-dependencies = [ "fuzzer" ]
 
 # Run the fuzzer
 [tasks.run]
@@ -51,7 +34,7 @@ args = [
     "--",
     "${@}",
 ]
-dependencies = [ "fuzzer" ]
+dependencies = [ "build" ]
 
 # Test/debug the fuzzer
 [tasks.test]
@@ -64,11 +47,10 @@ env = { "RUST_LOG" = "debug" }
 command = "cargo"
 args = [
     "run", "--release",
-    "--features", "debug",
     "--",
     "${@}",
 ]
-dependencies = [ "fuzzer" ]
+dependencies = [ "build" ]
 
 # Performance measurements
 [tasks.perf]
@@ -85,7 +67,7 @@ args = [
     "--",
     "${@}",
 ]
-dependencies = [ "fuzzer" ]
+dependencies = [ "build" ]
 
 # Clean up
 [tasks.clean]
