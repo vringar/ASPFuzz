@@ -4,11 +4,15 @@ use libafl_qemu::{
     edges::{edges_map_mut_ptr, EDGES_MAP_SIZE_IN_USE, MAX_EDGES_FOUND},
     sys::TCGTemp,
     GuestAddr, Hook, MemAccessInfo, Qemu, QemuDrCovHelper, QemuEdgeCoverageHelper, QemuExecutor,
-    QemuHelperTuple, QemuHooks, QemuInstrumentationAddressRangeFilter, Regs,
+    QemuExitReason, QemuHelperTuple, QemuHooks, QemuInstrumentationAddressRangeFilter, Regs,
 };
-use libasp::{borrow_global_conf, get_run_conf, CustomMetadataFeedback, ExceptionFeedback};
+use libasp::{
+    add_tunnels_cmp, borrow_global_conf, get_run_conf, CustomMetadataFeedback, ExceptionFeedback,
+    ExceptionHandler, Reset, ResetLevel, ResetState,
+};
 use rangemap::RangeMap;
 use std::{
+    env,
     path::PathBuf,
     ptr::addr_of_mut,
     sync::{
@@ -18,27 +22,75 @@ use std::{
     time::Duration,
 };
 
-type MyState =
-    StdState<BytesInput, InMemoryCorpus<BytesInput>, RomuDuoJrRand, CachedOnDiskCorpus<BytesInput>>;
+use crate::harness;
+pub const ON_CHIP_ADDR: GuestAddr = 0xffff_0000;
+
+type MyState = StdState<
+    BytesInput,
+    CachedOnDiskCorpus<BytesInput>,
+    RomuDuoJrRand,
+    CachedOnDiskCorpus<BytesInput>,
+>;
 
 pub fn run_client<SP>(
-    emu: Qemu,
+    qemu_args: Vec<String>,
     state: Option<MyState>,
     solutions_dir: PathBuf,
     log_dir: PathBuf,
     input_dir: PathBuf,
-    mut mgr: /*SimpleEventManager<SimpleMonitor<T>,MyState>*/ LlmpRestartingEventManager<
+    mut mgr: /*SimpleEventManager<SimpleMonitor<SP>,MyState>*/ LlmpRestartingEventManager<
         (),
         MyState,
         SP,
     >,
-    mut harness: impl FnMut(&BytesInput) -> ExitKind,
 ) -> Result<(), Error>
 where
     SP: ShMemProvider,
-    /*T: FnMut(&str)*/
+    //SP: FnMut(&str)
 {
     let conf = &get_run_conf().unwrap().yaml_config;
+    let env: Vec<(String, String)> = env::vars().collect();
+
+    let emu = Qemu::init(&qemu_args, &env).unwrap();
+    // Set fuzzing sinks
+    for sink in &conf.harness_sinks {
+        emu.set_breakpoint(*sink);
+    }
+
+    // Configure ResetState and ExceptionHandler helpers
+    let mut rs = ResetState::new(conf.qemu_sram_size);
+    let mut eh = ExceptionHandler::new(ON_CHIP_ADDR);
+
+    // Go to FUZZ_START
+    let addr = conf.harness_start;
+    emu.set_breakpoint(addr);
+    unsafe {
+        match emu.run() {
+            Ok(QemuExitReason::Breakpoint(guest_addr)) => {
+                assert_eq!(guest_addr, conf.harness_start);
+                println!("Guest addr: {guest_addr}, Conf harness: {addr}")
+            }
+            _ => panic!("Unexpected QEMU exit."),
+        }
+    };
+    emu.remove_breakpoint(conf.harness_start);
+    let cpu = emu.current_cpu().unwrap(); // ctx switch safe
+    let pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
+    log::debug!("#### First exit at {:#x} ####", pc);
+
+    // Save emulator state
+    rs.save(&emu, &ResetLevel::RustSnapshot);
+    // Catching exceptions
+    eh.start(&emu);
+    // Setup tunnels cmps
+    for cmp in &conf.tunnels_cmps {
+        add_tunnels_cmp(cmp.0, &cmp.1, &emu);
+    }
+    // Setup crash breakpoints
+    for bp in &conf.crashes_breakpoints {
+        emu.set_breakpoint(*bp);
+    }
+
     // Create an observation channel using the coverage map
     let edges_observer = unsafe {
         HitcountsMapObserver::new(VariableMapObserver::from_mut_slice(
@@ -71,7 +123,7 @@ where
             // RNG
             StdRand::with_seed(current_nanos()),
             // Corpus that will be evolved, we keep it in memory for performance
-            InMemoryCorpus::new(),
+            CachedOnDiskCorpus::new(input_dir.clone(), 100).unwrap(),
             // Corpus in which we store solutions,
             // on disk so the user can get them after stopping the fuzzer
             CachedOnDiskCorpus::new(cloned_solutions_dir, 100).unwrap(),
@@ -135,7 +187,8 @@ where
     } else {
         log::debug!("No write generation hooks");
     }
-
+    // The closure that we want to fuzz
+    let mut harness = harness::create_harness(rs, emu);
     let timeout = Duration::new(5, 0); // 5sec
     let mut executor = QemuExecutor::new(
         &mut hooks,
@@ -152,10 +205,10 @@ where
         state
             .load_initial_inputs(&mut fuzzer, &mut executor, &mut mgr, &[input_dir.clone()])
             .unwrap_or_else(|_| {
-                println!("Failed to load initial corpus at {:?}", &input_dir);
+                log::error!("Failed to load initial corpus at {:?}", &input_dir);
                 std::process::exit(0);
             });
-        println!(
+        log::info!(
             "We imported {} inputs from {:?}.",
             state.corpus().count(),
             &input_dir

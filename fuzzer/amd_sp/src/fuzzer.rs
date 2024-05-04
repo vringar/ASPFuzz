@@ -19,15 +19,9 @@ use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 
 use crate::client;
-use crate::harness;
 use crate::setup::parse_args;
 
-pub const ON_CHIP_ADDR: GuestAddr = 0xffff_0000;
-
 fn run(qemu_args: Vec<String>) {
-    let env: Vec<(String, String)> = env::vars().collect();
-
-    let emu = Qemu::init(&qemu_args, &env).unwrap();
     let conf = borrow_global_conf().unwrap();
 
     // Create directory for this run
@@ -60,57 +54,14 @@ fn run(qemu_args: Vec<String>) {
         input_dir,
     );
 
-    // Configure ResetState and ExceptionHandler helpers
-    let mut rs = ResetState::new(conf.qemu_sram_size);
-    let mut eh = ExceptionHandler::new(ON_CHIP_ADDR);
-
-    // Set fuzzing sinks
-    for sink in &conf.harness_sinks {
-        emu.set_breakpoint(*sink);
-    }
-
-    // Go to FUZZ_START
-    let addr = conf.harness_start;
-    emu.set_breakpoint(addr);
-    unsafe {
-        match emu.run() {
-            Ok(QemuExitReason::Breakpoint(guest_addr)) => {
-                assert_eq!(guest_addr, conf.harness_start);
-                println!("Guest addr: {guest_addr}, Conf harness: {addr}")
-            }
-            _ => panic!("Unexpected QEMU exit."),
-        }
-    };
-    emu.remove_breakpoint(conf.harness_start);
-    let cpu = emu.current_cpu().unwrap(); // ctx switch safe
-    let pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
-    log::debug!("#### First exit at {:#x} ####", pc);
-
-    // Save emulator state
-    rs.save(&emu, &ResetLevel::RustSnapshot);
-    // Catching exceptions
-    eh.start(&emu);
-    // Setup tunnels cmps
-    for cmp in &conf.tunnels_cmps {
-        add_tunnels_cmp(cmp.0, &cmp.1, &emu);
-    }
-    // Setup crash breakpoints
-    for bp in &conf.crashes_breakpoints {
-        emu.set_breakpoint(*bp);
-    }
-
-    // The closure that we want to fuzz
-    let harness = harness::create_harness(rs, emu);
-
     let mut run_client = |state: Option<_>, mgr, _core_id| -> Result<(), Error> {
         client::run_client(
-            emu,
+            qemu_args.clone(),
             state,
             solutions_dir.clone(),
             log_dir.clone(),
             input_dir.clone(),
             mgr,
-            harness.clone(),
         )
     };
 

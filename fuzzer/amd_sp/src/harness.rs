@@ -1,9 +1,11 @@
+use std::process;
+
 use libafl::prelude::*;
-use libafl_bolts::prelude::*;
-use libafl_qemu::{GuestAddr, Qemu, Regs};
+use libafl_bolts::{os::unix_signals::Signal, prelude::*};
+use libafl_qemu::{GuestAddr, Qemu, QemuExitReason, QemuExitReasonError, QemuShutdownCause, Regs};
 use libasp::{get_run_conf, ExceptionType, Reset, ResetState};
 
-use crate::fuzzer::ON_CHIP_ADDR;
+use crate::client::ON_CHIP_ADDR;
 
 extern "C" {
     fn aspfuzz_write_smn_flash(addr: GuestAddr, len: i32, buf: *mut u8);
@@ -65,8 +67,13 @@ pub fn create_harness(
         let mut pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
         log::debug!("Start at {:#x}", pc);
         unsafe {
-            if let Err(e) = emu.run() {
-                log::error!("{:#?}", e)
+            match emu.run() {
+                Ok(QemuExitReason::Breakpoint(_)) => {}
+                Ok(QemuExitReason::End(QemuShutdownCause::HostSignal(
+                    Signal::SigInterrupt,
+                ))) => process::exit(CTRL_C_EXIT),
+                Err(QemuExitReasonError::UnexpectedExit) => return ExitKind::Crash,
+                _ => panic!("Unexpected QEMU exit."),
             }
         };
 
