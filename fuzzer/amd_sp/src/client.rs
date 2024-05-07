@@ -139,6 +139,7 @@ where
     // Maximum input length
     state.set_max_size(conf.input_total_size);
 
+    // TODO: There is a better scheduling policy??
     // A queue policy to get testcasess from the corpus
     let scheduler = QueueScheduler::new();
 
@@ -149,6 +150,8 @@ where
     let mut log_drcov_path = log_dir.clone();
     log_drcov_path.push("drcov.log");
     let mut rangemap = RangeMap::<usize, (u16, String)>::new();
+
+    // TODO: Should this be dynamic?
     rangemap.insert(
         0x0_usize..0xffff_9000_usize,
         (0, "on-chip-ryzen-zen.bl".to_string()),

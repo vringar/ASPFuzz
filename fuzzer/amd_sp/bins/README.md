@@ -11,4 +11,4 @@ After successfully gaining code execution on the ASP, the on-chip bootloader can
 
 UEFI images can be gathered from the vendors websites.
 Often these come as .CAP files.
-Too generate .ROM files the first x bytes have to be removed to exactely reach 16 MiB.
+To generate .ROM files the first x bytes have to be removed to exactely reach 16 MiB.

@@ -54,7 +54,7 @@ pub enum ResetLevel {
     RustSnapshot,
 
     /*
-     * WIP
+     * Qemu Native
      */
     QemuSnapshot,
 
@@ -122,6 +122,7 @@ impl ResetState {
         unsafe {
             self.smn_slots = aspfuzz_smn_slots;
         }
+        emu.save_snapshot("start", true);
     }
 
     /* Super lazy reset */
@@ -202,8 +203,8 @@ impl ResetState {
     }
 
     /* Qemu snapshot reset */
-    fn load_qemu_snapshot(&self, _emu: &Qemu) {
-        panic!("QEMU snapshot unimplemented!");
+    fn load_qemu_snapshot(&self, emu: &Qemu) {
+        emu.load_snapshot("start", true)
     }
 
     /* Hard reset */

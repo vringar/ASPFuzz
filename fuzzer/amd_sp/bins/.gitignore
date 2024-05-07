@@ -1,3 +1,4 @@
 on-chip-bl-*
 *.ROM
 *.bin
+*.CAP
