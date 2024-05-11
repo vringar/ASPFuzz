@@ -1,0 +1,24 @@
+[workspace]
+members = [
+    "amd_sp",
+    "libasp"
+]
+resolver = "2"
+
+[workspace.dependencies]
+libafl = { git = "ssh://git@github.com/vringar/LibAFL.git", branch ="main",default-features = false, features = [
+    "prelude",
+    "fork"
+] }
+libafl_bolts = {  git = "ssh://git@github.com/vringar/LibAFL.git", branch ="main"}
+libafl_qemu = {  git = "ssh://git@github.com/vringar/LibAFL.git", branch ="main", features = [
+    "arm",
+    "systemmode",
+], default-features = false }
+
+[profile.dev]
+debug = true
+debug-assertions = true
+[profile.release]
+debug = true
+debug-assertions = true

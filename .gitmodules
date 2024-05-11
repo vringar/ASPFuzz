@@ -1,4 +1,0 @@
-[submodule "LibAFL"]
-	path = LibAFL
-	url = git@github.com:vringar/LibAFL.git
-	branch = main
