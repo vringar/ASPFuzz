@@ -95,7 +95,7 @@ pub fn parse_args() -> Vec<String> {
 
     // Create arguments to start QEMU with
     let mut qemu_args: Vec<String> = vec![env::args().next().unwrap()];
-    #[cfg(feature = "multicore")]
+    #[cfg(not(feature = "debug"))]
     qemu_args.append(&mut vec![
         "-trace".to_string(),
         "file=/dev/null".to_string(),

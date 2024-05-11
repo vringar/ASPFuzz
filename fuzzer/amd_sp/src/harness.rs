@@ -69,9 +69,9 @@ pub fn create_harness(
         unsafe {
             match emu.run() {
                 Ok(QemuExitReason::Breakpoint(_)) => {}
-                Ok(QemuExitReason::End(QemuShutdownCause::HostSignal(
-                    Signal::SigInterrupt,
-                ))) => process::exit(CTRL_C_EXIT),
+                Ok(QemuExitReason::End(QemuShutdownCause::HostSignal(Signal::SigInterrupt))) => {
+                    process::exit(CTRL_C_EXIT)
+                }
                 Err(QemuExitReasonError::UnexpectedExit) => return ExitKind::Crash,
                 _ => panic!("Unexpected QEMU exit."),
             }
