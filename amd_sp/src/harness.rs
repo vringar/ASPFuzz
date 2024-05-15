@@ -2,7 +2,7 @@ use std::process;
 
 use libafl::prelude::*;
 use libafl_bolts::{os::unix_signals::Signal, prelude::*};
-use libafl_qemu::{GuestAddr, Qemu, QemuExitReason, QemuExitReasonError, QemuShutdownCause, Regs};
+use libafl_qemu::{GuestAddr, Qemu, QemuExitError, QemuExitReason, QemuShutdownCause, Regs};
 use libasp::{get_run_conf, ExceptionType, Reset, ResetState};
 
 use crate::client::ON_CHIP_ADDR;
@@ -72,7 +72,7 @@ pub fn create_harness(
                 Ok(QemuExitReason::End(QemuShutdownCause::HostSignal(Signal::SigInterrupt))) => {
                     process::exit(CTRL_C_EXIT)
                 }
-                Err(QemuExitReasonError::UnexpectedExit) => return ExitKind::Crash,
+                Err(QemuExitError::UnexpectedExit) => return ExitKind::Crash,
                 _ => panic!("Unexpected QEMU exit."),
             }
         };
