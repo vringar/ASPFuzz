@@ -46,13 +46,13 @@
           git
           llvmPackages_18.clang
           pkg-config
-                          rust-bindgen-unwrapped
-                llvmPackages_18.libllvm
-                    llvmPackages_18.libclang
-                libgit2
+          rust-bindgen-unwrapped
+          llvmPackages_18.libllvm
+          llvmPackages_18.libclang
+          libgit2
 
-                meson
-                ninja
+          meson
+          ninja
         ];
         buildInputs = with pkgs; [
           nettle
@@ -60,7 +60,6 @@
           glib
           libgcrypt
           llvmPackages_18.libcxx
-
         ];
       in
         with pkgs; {
