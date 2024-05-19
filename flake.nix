@@ -53,6 +53,8 @@
 
           meson
           ninja
+          python311Packages.libfdt
+          python311
         ];
         buildInputs = with pkgs; [
           nettle
@@ -60,6 +62,8 @@
           glib
           libgcrypt
           llvmPackages_18.libcxx
+          pixman
+          xorg.libX11
         ];
       in
         with pkgs; {
@@ -73,14 +77,7 @@
               (with pkgs; [
                 # DevTools
                 zsh
-
-                python311Packages.libfdt
-                python311
-                pixman
-                xorg.libX11
-
                 # getting Rustanalyzer to work
-
                 openssl
               ])
               ++ pkgs.lib.optionals pkgs.stdenv.isDarwin (with pkgs; [libiconv]);
