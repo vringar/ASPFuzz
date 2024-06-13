@@ -80,7 +80,6 @@ tunnels:
 crashes:
     # Breakpoints as crashes
     breakpoints:
-        - null
     mmap:
         # Defining the none-executable address space
         no_exec:
@@ -95,19 +94,18 @@ crashes:
             # SRAM region (BootROMServicePage) which can be used as a hash for the public key
             - begin:    0x4fbb0
               end:      0x4fbd0
-              no_hook:  null
             # SRAM region (BootROMServicePage) storing the public key
             - begin:    0x4f410
               end:      0x4f850
-              no_hook:
+              holes: # This name is really bad but I wanted to reuse a struct
                     -   0xffff2184
         # Write hooks on every ldr operation
         # except on addresses listed in "no_ldr"
         # (NOT recommended, very slow)
         no_write_hooks:
-            - begin:  null
-              end:    null
-              no_ldr: null
+            # - begin:  null
+            #   end:    null
+            #   no_ldr: null
 #            - begin:    0x3f8a0     # SRAM region which can be used as a hash for the public key
 #              end:      0x3f8c0
 #              no_ldr:

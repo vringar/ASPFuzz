@@ -2,14 +2,18 @@ use libafl::inputs::UsesInput;
 use libafl_qemu::*;
 use log;
 
-use crate::YAMLConfig;
+use crate::{CmpConfig, YAMLConfig};
 
 pub fn setup_tunnels<QT, S>(hooks: &QemuHooks<QT, S>, config: &YAMLConfig)
 where
     QT: QemuHelperTuple<S>,
     S: UsesInput,
 {
-    for (addr, action) in &config.tunnels_cmps {
+    for CmpConfig {
+        addr,
+        value: action,
+    } in &config.tunnels.cmps
+    {
         let addr = *addr;
         if let Ok(constant) = action.parse::<GuestReg>() {
             hooks.instruction(

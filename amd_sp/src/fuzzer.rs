@@ -3,7 +3,6 @@ use libafl_bolts::core_affinity::Cores;
 use libafl_bolts::current_time;
 use libafl_bolts::shmem::ShMemProvider;
 use libafl_bolts::shmem::StdShMemProvider;
-use libafl_qemu::*;
 use libasp::*;
 
 use nix::{self, unistd::dup};
@@ -22,7 +21,7 @@ use crate::client;
 use crate::setup::parse_args;
 
 fn run(qemu_args: Vec<String>) {
-    let conf = borrow_global_conf().unwrap();
+    let conf = get_run_conf().unwrap();
 
     // Create directory for this run
     let run_dir = &get_run_conf().unwrap().run_dir;
@@ -42,15 +41,18 @@ fn run(qemu_args: Vec<String>) {
     let mut config_path = run_dir.clone();
     config_path.push("config.yaml");
     if env::var("AFL_LAUNCHER_CLIENT").is_err() {
-        fs::copy(&conf.config_file, &config_path).unwrap();
+        fs::copy(&conf.config_path, &config_path).unwrap();
     }
 
+    let conf = &conf.yaml_config;
+
+    println!("{:#X?}", conf);
     // Generate initial inputs
     let input_dir: PathBuf = InitialInput::new().create_initial_inputs(
-        &conf.input_initial,
-        &conf.input_mem,
-        conf.flash_size as GuestAddr,
-        conf.input_total_size,
+        &conf.input.initial,
+        &conf.input.mem,
+        conf.flash.size,
+        conf.input.total_size(),
         input_dir,
     );
 

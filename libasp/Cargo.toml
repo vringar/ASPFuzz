@@ -11,7 +11,8 @@ libafl = { workspace=true }
 libafl_bolts = { workspace=true }
 libafl_qemu = { workspace=true }
 serde = { version = "1.0", default-features = false, features = [
-    "alloc",
+    "alloc","derive"
 ] } # serialization lib
+serde_yaml = "*"
 yaml-rust = "0.4.5"
 log = "0.4"

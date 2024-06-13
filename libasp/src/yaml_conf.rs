@@ -1,59 +1,156 @@
 use crate::reset_state::ResetLevel;
 /// Parsing the YAML config file
 use libafl_qemu::*;
+use serde::Deserialize;
+use sys::GuestUsize;
 
-use std::fmt::{Debug, Formatter, Result};
 use std::fs::File;
-use std::io::Read;
-use std::path::PathBuf;
-use std::str::FromStr;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-extern crate yaml_rust;
-use yaml_rust::YamlLoader;
 
 static CONF: OnceLock<RunConfig> = OnceLock::new();
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct RunConfig {
     pub yaml_config: YAMLConfig,
     pub num_cores: u32,
     pub run_dir: PathBuf,
-}
-#[derive(Default)]
-pub struct YAMLConfig {
-    pub config_file: String,
-    pub qemu_zen: String,
-    pub qemu_sram_size: GuestAddr,
-    pub qemu_on_chip_bl_path: String,
-    pub flash_start_smn: GuestAddr,
-    pub flash_size: usize,
-    pub flash_start_cpu: GuestAddr,
-    pub flash_base: String,
-    pub input_initial: Vec<String>,
-    pub input_mem: Vec<(GuestAddr, usize)>,
-    pub input_fixed: Vec<(GuestAddr, GuestAddr)>,
-    pub input_total_size: usize,
-    pub harness_start: GuestAddr,
-    pub harness_sinks: Vec<GuestAddr>,
-    pub tunnels_cmps: Vec<(GuestAddr, String)>,
-    pub crashes_breakpoints: Vec<GuestAddr>,
-    pub crashes_mmap_no_exec: Vec<[GuestAddr; 2]>,
-    pub crashes_mmap_flash_read_fn: GuestAddr,
-    pub crashes_mmap_no_write_flash_fn: Vec<(GuestAddr, GuestAddr, Vec<GuestAddr>)>,
-    pub crashes_mmap_no_write_hooks: Vec<(GuestAddr, GuestAddr, Vec<GuestAddr>)>,
-    pub snapshot_default: ResetLevel,
-    pub snapshot_on_crash: ResetLevel,
-    pub snapshot_periodically: ResetLevel,
-    pub snapshot_period: usize,
+    pub config_path: PathBuf,
 }
 
-pub fn init_global_conf(file: &str, num_cores: u32, run_dir: PathBuf) {
-    let yaml = YAMLConfig::new(file);
+#[derive(Deserialize, Debug)]
+pub enum ZenVersion {
+    Zen1,
+    #[serde(alias = "Zen+")]
+    ZenPlus,
+    Zen2,
+    Zen3,
+    Zen4,
+    ZenTesla,
+}
+
+impl ZenVersion {
+    pub fn get_qemu_machine_name(&self) -> &'static str {
+        match self {
+            ZenVersion::Zen1 => "amd-psp-zen",
+            ZenVersion::ZenPlus => "amd-psp-zen+",
+            ZenVersion::Zen2 => "amd-psp-zen2",
+            ZenVersion::Zen3 => "amd-psp-zen3",
+            ZenVersion::Zen4 => panic!("Zen4 is currently not supported"),
+            ZenVersion::ZenTesla => "amd-psp-zentesla",
+        }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct QemuConf {
+    pub zen: ZenVersion,
+    pub on_chip_bl_path: PathBuf,
+}
+#[derive(Deserialize, Debug)]
+pub struct FlashConfig {
+    pub start_smn: GuestAddr,
+    pub size: GuestUsize,
+    pub start_cpu: GuestAddr,
+    pub base: PathBuf,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct MemConfig {
+    pub addr: GuestAddr,
+    pub size: usize,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct FixedConfig {
+    pub addr: GuestAddr,
+    pub val: GuestUsize,
+}
+#[derive(Deserialize, Debug)]
+pub struct InputConfig {
+    pub initial: Vec<PathBuf>,
+    pub mem: Vec<MemConfig>,
+    pub fixed: Vec<FixedConfig>,
+}
+
+impl InputConfig {
+    pub fn total_size(&self) -> usize {
+        self.mem.iter().fold(0, |counter, e| counter + e.size)
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct HarnessConfig {
+    pub start: GuestAddr,
+    pub sinks: Vec<GuestAddr>,
+}
+#[derive(Deserialize, Debug)]
+pub struct CmpConfig {
+    #[serde(alias = "addr")]
+    pub addr: GuestAddr,
+    #[serde(alias = "r0")]
+    pub value: String,
+}
+#[derive(Deserialize, Debug)]
+pub struct TunnelConfig {
+    pub cmps: Vec<CmpConfig>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct NoExecConfig {
+    pub begin: GuestAddr,
+    pub end: GuestAddr,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RegionWithHoles {
+    pub begin: GuestAddr,
+    pub end: GuestAddr,
+    #[serde(default)]
+    pub holes: Vec<GuestAddr>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CrashConfig {
+    pub breakpoints: Vec<GuestAddr>,
+    pub mmap: MmapConfig,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct MmapConfig {
+    pub no_exec: Vec<NoExecConfig>,
+    pub flash_read_fn: GuestAddr,
+    pub no_write_flash_fn: Vec<RegionWithHoles>,
+    pub no_write_hooks: Vec<RegionWithHoles>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SnapshotConfig {
+    pub default: ResetLevel,
+    pub on_crash: ResetLevel,
+    pub periodically: ResetLevel,
+    pub period: usize,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct YAMLConfig {
+    pub qemu: QemuConf,
+    pub flash: FlashConfig,
+    pub input: InputConfig,
+    pub harness: HarnessConfig,
+    pub tunnels: TunnelConfig,
+    pub crashes: CrashConfig,
+    pub snapshot: SnapshotConfig,
+}
+
+pub fn init_global_conf(config_path: &Path, num_cores: u32, run_dir: PathBuf) {
+    let yaml = YAMLConfig::new(config_path);
 
     CONF.set(RunConfig {
         yaml_config: yaml,
         num_cores,
         run_dir,
+        config_path: config_path.to_owned(),
     })
     .unwrap();
 }
@@ -65,344 +162,50 @@ pub fn get_run_conf() -> Option<&'static RunConfig> {
     CONF.get()
 }
 impl YAMLConfig {
-    fn new(config_file: &str) -> Self {
-        let mut file = File::options()
+    fn new(config_file: &Path) -> Self {
+        let file = File::options()
             .read(true)
             .write(false)
             .open(config_file)
             .expect("Unable to open yaml config file");
-        let mut contents = String::new();
 
-        file.read_to_string(&mut contents)
-            .expect("Unable to read yaml file");
-        drop(file);
-
-        let conf = &YamlLoader::load_from_str(&contents).unwrap()[0];
-
-        let qemu_zen = conf["qemu"]["zen"]
-            .as_str()
-            .expect("Expecting 'qemu: zen:' in yaml");
-        let qemu_sram_size = if qemu_zen == "Zen1" || qemu_zen == "Zen+" || qemu_zen == "ZenTesla" {
-            0x40000
-        } else if qemu_zen == "Zen2" || qemu_zen == "Zen3" {
-            0x50000
-        } else {
-            println!("{} generation not supported yet.", qemu_zen);
-            std::process::exit(8);
-        } as GuestAddr;
-        let qemu_on_chip_bl_path = conf["qemu"]["on_chip_bl_path"]
-            .as_str()
-            .expect("Expecting 'qemu: on_chip_bl_path:' in yaml");
-
-        let flash_start_smn = conf["flash"]["start_smn"]
-            .as_i64()
-            .expect("Expecting 'flash: start_smn:' in yaml")
-            as GuestAddr;
-        let flash_size = conf["flash"]["size"]
-            .as_i64()
-            .expect("Expecting 'flash: size:' in yaml") as usize;
-        let flash_start_cpu = conf["flash"]["start_cpu"]
-            .as_i64()
-            .expect("Expecting 'flash: start_cpu:' in yaml")
-            as GuestAddr;
-        let flash_base = conf["flash"]["base"]
-            .as_str()
-            .expect("Expecting 'flash: base:' in yaml");
-
-        let input_initial_iter = conf["input"]["initial"]
-            .as_vec()
-            .expect("Expecting 'input: initial:' in yaml")
-            .iter();
-        let input_mem_iter = conf["input"]["mem"]
-            .as_vec()
-            .expect("Expecting 'input: mem:' in yaml")
-            .iter();
-        let input_fixed_iter = conf["input"]["fixed"]
-            .as_vec()
-            .expect("Expecting 'input: fixed:' in yaml")
-            .iter();
-
-        let harness_start = conf["harness"]["start"]
-            .as_i64()
-            .expect("Expecting 'harness: start:' in yaml") as GuestAddr;
-        let harness_sinks_iter = conf["harness"]["sinks"]
-            .as_vec()
-            .expect("Expecting 'harness: sinks:' in yaml")
-            .iter();
-
-        let tunnels_cmps_iter = conf["tunnels"]["cmps"]
-            .as_vec()
-            .expect("Expecting 'tunnels: cmps:' in yaml")
-            .iter();
-
-        let crashes_breakpoints_iter = conf["crashes"]["breakpoints"]
-            .as_vec()
-            .expect("Expecting 'crashes: breakpoints:' in yaml")
-            .iter();
-        let crashes_mmap_flash_read_fn = conf["crashes"]["mmap"]["flash_read_fn"]
-            .as_i64()
-            .expect("Expecting 'crashes: mmap: flash_read_fn:' in yaml")
-            as GuestAddr;
-        let crashes_mmap_no_exec_iter = conf["crashes"]["mmap"]["no_exec"]
-            .as_vec()
-            .expect("Expecting 'crashes: mmap: no_exec:' in yaml")
-            .iter();
-        let crashes_mmap_no_write_flash_fn_iter = conf["crashes"]["mmap"]["no_write_flash_fn"]
-            .as_vec()
-            .expect("Expecting 'crashes: mmap: no_write:' in yaml")
-            .iter();
-        let crashes_mmap_no_write_hooks_iter = conf["crashes"]["mmap"]["no_write_hooks"]
-            .as_vec()
-            .expect("Expecting 'crashes: mmap: no_write:' in yaml")
-            .iter();
-
-        let mut input_initial = vec![];
-        for initial in input_initial_iter {
-            if initial.is_null() {
-                break;
-            }
-            input_initial.push(initial.as_str().unwrap().to_string());
-        }
-
-        let mut input_mem = vec![];
-        let mut input_total_size = 0;
-        for mem in input_mem_iter {
-            if mem["addr"].is_null() || mem["size"].is_null() {
-                break;
-            }
-            input_mem.push((
-                mem["addr"].as_i64().unwrap() as GuestAddr,
-                mem["size"].as_i64().unwrap() as usize,
-            ));
-            input_total_size += mem["size"].as_i64().unwrap() as usize;
-        }
-
-        let mut input_fixed = vec![];
-        for fixed in input_fixed_iter {
-            if fixed["addr"].is_null() || fixed["val"].is_null() {
-                break;
-            }
-            input_fixed.push((
-                fixed["addr"].as_i64().unwrap() as GuestAddr,
-                fixed["val"].as_i64().unwrap() as GuestAddr,
-            ));
-        }
-
-        let mut harness_sinks = vec![];
-        for sink in harness_sinks_iter {
-            harness_sinks.push(sink.as_i64().expect("Expecting at least 1 sink") as GuestAddr);
-        }
-
-        let mut tunnels_cmps: Vec<(GuestAddr, String)> = vec![];
-        for cmps in tunnels_cmps_iter {
-            if cmps["addr"].is_null() || cmps["r0"].is_null() {
-                break;
-            }
-            if cmps["r0"].as_str().is_some() {
-                tunnels_cmps.push((
-                    cmps["addr"].as_i64().unwrap() as GuestAddr,
-                    cmps["r0"].as_str().unwrap().to_string(),
-                ));
-            } else {
-                tunnels_cmps.push((
-                    cmps["addr"].as_i64().unwrap() as GuestAddr,
-                    cmps["r0"].as_i64().unwrap().to_string(),
-                ));
-            }
-        }
-
-        let mut crashes_breakpoints = vec![];
-        for breakpoint in crashes_breakpoints_iter {
-            if breakpoint.is_null() {
-                break;
-            }
-            crashes_breakpoints.push(breakpoint.as_i64().unwrap() as GuestAddr);
-        }
-
-        let mut crashes_mmap_no_exec = vec![];
-        for no_exec in crashes_mmap_no_exec_iter {
-            if no_exec["begin"].is_null() || no_exec["end"].is_null() {
-                break;
-            }
-            crashes_mmap_no_exec.push([
-                no_exec["begin"].as_i64().unwrap() as GuestAddr,
-                no_exec["end"].as_i64().unwrap() as GuestAddr,
-            ]);
-        }
-
-        let mut crashes_mmap_no_write_hooks = vec![];
-        for no_write in crashes_mmap_no_write_hooks_iter {
-            if no_write["begin"].is_null() || no_write["end"].is_null() {
-                break;
-            }
-            let mut no_ldr_vec: Vec<GuestAddr> = vec![];
-            if !no_write["no_ldr"].is_null() {
-                let crashes_mmap_no_write_no_ldr_iter = no_write["no_ldr"]
-                    .as_vec()
-                    .expect("Expecting 'crashes: mmap: no_write_hooks: no_ldr:' in yaml")
-                    .iter();
-                for no_ldr in crashes_mmap_no_write_no_ldr_iter {
-                    no_ldr_vec.push(no_ldr.as_i64().unwrap() as GuestAddr);
-                }
-            }
-            crashes_mmap_no_write_hooks.push((
-                no_write["begin"].as_i64().unwrap() as GuestAddr,
-                no_write["end"].as_i64().unwrap() as GuestAddr,
-                no_ldr_vec,
-            ));
-        }
-
-        let mut crashes_mmap_no_write_flash_fn = vec![];
-        for no_write in crashes_mmap_no_write_flash_fn_iter {
-            if no_write["begin"].is_null() || no_write["end"].is_null() {
-                break;
-            }
-            let mut no_hook_vec: Vec<GuestAddr> = vec![];
-            if !no_write["no_hook"].is_null() {
-                let crashes_mmap_no_write_flash_fn_iter = no_write["no_hook"]
-                    .as_vec()
-                    .expect("Expecting 'crashes: mmap: no_write_flash_fn: no_hook:' in yaml")
-                    .iter();
-                for no_hook in crashes_mmap_no_write_flash_fn_iter {
-                    no_hook_vec.push(no_hook.as_i64().unwrap() as GuestAddr);
-                }
-            }
-            crashes_mmap_no_write_flash_fn.push((
-                no_write["begin"].as_i64().unwrap() as GuestAddr,
-                no_write["end"].as_i64().unwrap() as GuestAddr,
-                no_hook_vec,
-            ));
-        }
-
-        Self {
-            config_file: config_file.to_string(),
-            qemu_zen: qemu_zen.to_string(),
-            qemu_sram_size,
-            qemu_on_chip_bl_path: qemu_on_chip_bl_path.to_string(),
-            flash_start_smn,
-            flash_size,
-            flash_start_cpu,
-            flash_base: flash_base.to_string(),
-            input_initial,
-            input_mem,
-            input_fixed,
-            input_total_size,
-            harness_start,
-            harness_sinks,
-            tunnels_cmps,
-            crashes_breakpoints,
-            crashes_mmap_no_exec,
-            crashes_mmap_flash_read_fn,
-            crashes_mmap_no_write_flash_fn,
-            crashes_mmap_no_write_hooks,
-            snapshot_default: ResetLevel::from_str(conf["snapshot"]["default"].as_str().unwrap())
-                .unwrap(),
-            snapshot_on_crash: ResetLevel::from_str(conf["snapshot"]["on_crash"].as_str().unwrap())
-                .unwrap(),
-            snapshot_periodically: ResetLevel::from_str(
-                conf["snapshot"]["periodically"].as_str().unwrap(),
-            )
-            .unwrap(),
-            snapshot_period: conf["snapshot"]["period"].as_i64().unwrap() as usize,
-        }
+        serde_yaml::from_reader(file).unwrap()
     }
 }
 
-impl Debug for YAMLConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        let mut out_str = "".to_string();
-        out_str.push_str(&format!("#### YAML config: {} ####\n", self.config_file));
-        out_str.push_str("Qemu:\n");
-        out_str.push_str(&format!("\tzen:\t\t\t\t{}\n", self.qemu_zen));
-        out_str.push_str(&format!(
-            "\tsram size:\t\t\t{:#010x}\n",
-            self.qemu_sram_size
-        ));
-        out_str.push_str(&format!(
-            "\ton-chip bl path:\t\t{}\n",
-            self.qemu_on_chip_bl_path
-        ));
-        out_str.push_str("Flash:\n");
-        out_str.push_str(&format!(
-            "\tstart_smn:\t\t\t{:#010x}\n",
-            self.flash_start_smn
-        ));
-        out_str.push_str(&format!("\tsize:\t\t\t\t{:#010x}\n", self.flash_size));
-        out_str.push_str(&format!(
-            "\tstart_cpu:\t\t\t{:#010x}\n",
-            self.flash_start_cpu
-        ));
-        out_str.push_str(&format!("\tbase:\t\t\t\t{}\n", self.flash_base));
-        out_str.push_str("Input:\n");
-        out_str.push_str(&format!("\tinitial:\t\t\t{:?}\n", self.input_initial));
-        out_str.push_str("\tmem:\t\t\t\t[");
-        for mem in self.input_mem.iter() {
-            out_str.push_str(&format!("({:#010x},{:#x}), ", mem.0, mem.1));
-        }
-        out_str.push_str("]\n");
-        out_str.push_str(&format!(
-            "\ttotal size:\t\t\t{:#x}\n",
-            self.input_total_size
-        ));
-        out_str.push_str("\tfixed:\t\t\t\t[");
-        for fixed in self.input_fixed.iter() {
-            out_str.push_str(&format!("({:#010x},{:#x}), ", fixed.0, fixed.1));
-        }
-        out_str.push_str("]\n");
-        out_str.push_str("Harness:\n");
-        out_str.push_str(&format!("\tstart:\t\t\t\t{:#010x}\n", self.harness_start));
-        out_str.push_str("\tsinks:\t\t\t\t[");
-        for sink in self.harness_sinks.iter() {
-            out_str.push_str(&format!("{:#010x}, ", sink));
-        }
-        out_str.push_str("]\n");
-        out_str.push_str("Tunnels:\n");
-        out_str.push_str("\tcmps:\t\t\t\t[");
-        for cmps in self.tunnels_cmps.iter() {
-            out_str.push_str(&format!("({:#010x},R0={}), ", cmps.0, cmps.1));
-        }
-        out_str.push_str("]\n");
-        out_str.push_str("Crashes:\n");
-        out_str.push_str("\tbreakpoints:\t\t\t[");
-        for breakpoint in self.crashes_breakpoints.iter() {
-            out_str.push_str(&format!("{:#010x}, ", breakpoint));
-        }
-        out_str.push_str("]\n");
-        out_str.push_str("\tmmap no_exec:\t\t\t[");
-        for no_exec in self.crashes_mmap_no_exec.iter() {
-            out_str.push_str(&format!("({:#010x},{:#010x}), ", no_exec[0], no_exec[1]));
-        }
-        out_str.push_str("]\n");
-        out_str.push_str(&format!(
-            "\tmmap flash read function:\t{:#010x}\n",
-            self.crashes_mmap_flash_read_fn
-        ));
-        out_str.push_str("\tmmap no_write_flash_fn:\t\t[");
-        for no_write in self.crashes_mmap_no_write_flash_fn.iter() {
-            out_str.push_str(&format!("({:#010x},{:#010x}), [", no_write.0, no_write.1));
-            for no_hook in &no_write.2 {
-                out_str.push_str(&format!("{:#010x}, ", no_hook));
-            }
-            out_str.push_str("]), ");
-        }
-        out_str.push_str("]\n");
-        out_str.push_str("\tmmap no_write_hooks:\t\t[");
-        for no_write in self.crashes_mmap_no_write_hooks.iter() {
-            out_str.push_str(&format!("({:#010x},{:#010x}, [", no_write.0, no_write.1));
-            for no_ldr in &no_write.2 {
-                out_str.push_str(&format!("{:#010x}, ", no_ldr));
-            }
-            out_str.push_str("]), ");
-        }
-        out_str.push_str("]\n");
-        out_str.push_str("Snapshot:\n");
-        out_str.push_str(&format!("\tdefault:\t\t\t{:?}\n", self.snapshot_default));
-        out_str.push_str(&format!("\ton crash:\t\t\t{:?}\n", self.snapshot_on_crash));
-        out_str.push_str(&format!(
-            "\tperiodically:\t\t\t{:?}\n",
-            self.snapshot_periodically
-        ));
-        out_str.push_str(&format!("\tperiod:\t\t\t\t{}\n", self.snapshot_period));
-        write!(f, "{}", out_str)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    #[test]
+    fn read_zen1() {
+        let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        println!("CARGO PATH IS {}", d.display());
+        YAMLConfig::new(&d.join("../amd_sp/yaml/ryzen_zen1_desktop_parse_asp_flash.yaml"));
+    }
+
+    #[test]
+    fn read_zen2() {
+        let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        println!("CARGO PATH IS {}", d.display());
+        YAMLConfig::new(&d.join("../amd_sp/yaml/ryzen_zen2_desktop_parse_asp_flash.yaml"));
+    }
+    #[test]
+    fn read_zen3() {
+        let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        println!("CARGO PATH IS {}", d.display());
+        YAMLConfig::new(&d.join("../amd_sp/yaml/ryzen_zen3_desktop_parse_asp_flash.yaml"));
+    }
+    #[test]
+    fn read_zentesla() {
+        let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        println!("CARGO PATH IS {}", d.display());
+        YAMLConfig::new(&d.join("../amd_sp/yaml/ryzen_zentesla_parse_asp_flash.yaml"));
+    }
+    #[test]
+    fn read_zenplus() {
+        let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        println!("CARGO PATH IS {}", d.display());
+        YAMLConfig::new(&d.join("../amd_sp/yaml/ryzen_zen+_desktop_parse_asp_flash.yaml"));
     }
 }

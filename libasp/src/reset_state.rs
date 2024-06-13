@@ -3,6 +3,7 @@ use std::fmt::{Debug, Formatter};
 
 use libafl_qemu::*;
 use log;
+use serde::Deserialize;
 use std::fs::File;
 use std::io::Write;
 use std::str::FromStr;
@@ -24,7 +25,7 @@ pub struct ResetState {
     smn_slots: [u32; 32],
 }
 
-#[derive(Default)]
+#[derive(Default, Deserialize)]
 pub enum ResetLevel {
     /*
      *  Loading snapshot:

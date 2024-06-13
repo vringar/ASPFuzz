@@ -5,7 +5,7 @@ use libasp::{borrow_global_conf, init_global_conf};
 
 use std::{
     env,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::exit,
 };
 
@@ -15,7 +15,7 @@ use std::{
 struct Args {
     /// YAML config file path
     #[arg(short, long)]
-    yaml_path: String,
+    yaml_path: PathBuf,
 
     /// Run directory name
     #[arg(short, long)]
@@ -29,8 +29,11 @@ struct Args {
 pub fn parse_args() -> Vec<String> {
     let cli_args = Args::parse();
     // Parse YAML config
-    if !Path::new(&cli_args.yaml_path).exists() {
-        println!("YAML file path does not exist: {}", cli_args.yaml_path);
+    if !cli_args.yaml_path.exists() {
+        println!(
+            "YAML file path does not exist: {}",
+            cli_args.yaml_path.display()
+        );
         exit(2);
     }
     let date = Local::now();
@@ -51,46 +54,19 @@ pub fn parse_args() -> Vec<String> {
     // For multicore fuzzing a core number must be provided
 
     //Check if pathes exist
-    if !Path::new(&conf.qemu_on_chip_bl_path).exists() {
+    if !conf.qemu.on_chip_bl_path.exists() {
         println!(
             "On-chip-bl file path does not exist: {}",
-            &conf.qemu_on_chip_bl_path
+            conf.qemu.on_chip_bl_path.display()
         );
         exit(4);
     }
-    if !Path::new(&conf.flash_base).exists() {
-        println!("UEFI file path does not exist: {}", &conf.flash_base);
+    if !conf.flash.base.exists() {
+        println!(
+            "UEFI file path does not exist: {}",
+            &conf.flash.base.display()
+        );
         exit(5);
-    }
-
-    // Handle Zen generation
-    if ![
-        String::from("Zen1"),
-        String::from("Zen+"),
-        String::from("Zen2"),
-        String::from("Zen3"),
-        String::from("Zen4"),
-        String::from("ZenTesla"),
-    ]
-    .contains(&conf.qemu_zen)
-    {
-        println!("{} not a valid Zen generation.", &conf.qemu_zen);
-        std::process::exit(6);
-    }
-    let zen_generation: &str;
-    if conf.qemu_zen == *"Zen1" {
-        zen_generation = "amd-psp-zen";
-    } else if conf.qemu_zen == *"Zen+" {
-        zen_generation = "amd-psp-zen+";
-    } else if conf.qemu_zen == *"Zen2" {
-        zen_generation = "amd-psp-zen2";
-    } else if conf.qemu_zen == *"Zen3" {
-        zen_generation = "amd-psp-zen3";
-    } else if conf.qemu_zen == *"ZenTesla" {
-        zen_generation = "amd-psp-zentesla";
-    } else {
-        println!("{} generation not supported yet.", &conf.qemu_zen);
-        std::process::exit(7);
     }
 
     // Create arguments to start QEMU with
@@ -107,22 +83,26 @@ pub fn parse_args() -> Vec<String> {
     ]);
     qemu_args.extend(vec![
         "--machine".to_string(),
-        zen_generation.to_string(),
+        conf.qemu.zen.get_qemu_machine_name().to_string(),
         "--nographic".to_string(),
         "-device".to_string(),
         format![
             "loader,file={}/{},addr=0xffff0000,force-raw=on",
             env::var("PROJECT_DIR").unwrap(),
-            &conf.qemu_on_chip_bl_path
+            &conf.qemu.on_chip_bl_path.display()
         ],
         "-global".to_string(),
         format![
             "driver=amd_psp.smnflash,property=flash_img,value={}/{}",
             env::var("PROJECT_DIR").unwrap(),
-            &conf.flash_base
+            &conf.flash.base.display()
         ],
         "-bios".to_string(),
-        format!["{}/{}", env::var("PROJECT_DIR").unwrap(), &conf.flash_base],
+        format![
+            "{}/{}",
+            env::var("PROJECT_DIR").unwrap(),
+            &conf.flash.base.display()
+        ],
     ]);
 
     qemu_args

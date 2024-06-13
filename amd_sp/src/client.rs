@@ -9,9 +9,11 @@ use libafl_qemu::{
 };
 use libasp::{
     borrow_global_conf, get_run_conf, setup_tunnels, CustomMetadataFeedback, ExceptionFeedback,
-    ExceptionHandler, Reset, ResetLevel, ResetState,
+    ExceptionHandler, RegionWithHoles, Reset, ResetLevel, ResetState,
 };
 use rangemap::RangeMap;
+use std::fmt::Debug;
+use std::ops::Range;
 use std::{
     env,
     path::PathBuf,
@@ -22,7 +24,6 @@ use std::{
     },
     time::Duration,
 };
-use std::{fmt::Debug, ops::Range};
 
 use crate::harness;
 pub const ON_CHIP_ADDR: GuestAddr = 0xffff_0000;
@@ -101,7 +102,7 @@ where
     });
 
     // Maximum input length
-    state.set_max_size(conf.input_total_size);
+    state.set_max_size(conf.input.total_size());
 
     // TODO: There is a better scheduling policy??
     // A queue policy to get testcasess from the corpus
@@ -113,27 +114,27 @@ where
     let mut hooks = setup_hooks(log_dir, emu, conf);
 
     // Set fuzzing sinks
-    for sink in &conf.harness_sinks {
+    for sink in &conf.harness.sinks {
         emu.set_breakpoint(*sink);
     }
 
     // Configure ResetState and ExceptionHandler helpers
-    let mut rs = ResetState::new(conf.qemu_sram_size);
+    let mut rs = ResetState::new(conf.flash.size);
     let mut eh = ExceptionHandler::new(ON_CHIP_ADDR);
 
     // Go to FUZZ_START
-    let addr = conf.harness_start;
+    let addr = conf.harness.start;
     emu.set_breakpoint(addr);
     unsafe {
         match emu.run() {
             Ok(QemuExitReason::Breakpoint(guest_addr)) => {
-                assert_eq!(guest_addr, conf.harness_start);
+                assert_eq!(guest_addr, conf.harness.start);
                 println!("Guest addr: {guest_addr}, Conf harness: {addr}")
             }
             _ => panic!("Unexpected QEMU exit."),
         }
     };
-    emu.remove_breakpoint(conf.harness_start);
+    emu.remove_breakpoint(conf.harness.start);
     hooks
         .helpers_mut()
         .match_first_type_mut::<QemuDrCovHelper>()
@@ -147,7 +148,7 @@ where
     // Catching exceptions
     eh.start(&emu);
     // Setup crash breakpoints
-    for bp in &conf.crashes_breakpoints {
+    for bp in &conf.crashes.breakpoints {
         emu.set_breakpoint(*bp);
     }
 
@@ -224,7 +225,7 @@ fn setup_hooks(
         Hook::Empty,
         Hook::Function(exec_block_hook),
     );
-    if !conf.crashes_mmap_no_write_hooks.is_empty() {
+    if !conf.crashes.mmap.no_write_hooks.is_empty() {
         log::debug!("Adding write generation hooks");
         hooks.writes(
             Hook::Function(gen_writes_hook),
@@ -255,8 +256,8 @@ where
 {
     let id = COUNTER_EDGE_HOOKS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let conf = borrow_global_conf().unwrap();
-    for no_exec in conf.crashes_mmap_no_exec.iter() {
-        if src >= no_exec[0] && src < no_exec[1] {
+    for no_exec in conf.crashes.mmap.no_exec.iter() {
+        if src >= no_exec.begin && src < no_exec.end {
             log::debug!("Generate block:");
             log::debug!("> src: {:#x}", src);
             log::debug!("> id: {:#x}", id);
@@ -265,7 +266,7 @@ where
         }
     }
 
-    if !conf.crashes_mmap_no_write_flash_fn.is_empty() && conf.crashes_mmap_flash_read_fn == src {
+    if !conf.crashes.mmap.no_write_flash_fn.is_empty() && conf.crashes.mmap.flash_read_fn == src {
         log::debug!("Adding block hook for flash_read_fn");
         let _ = FLASH_READ_HOOK_ID.set(id);
         return Some(id);
@@ -283,7 +284,7 @@ where
         let cpu = emu.current_cpu().unwrap();
         let pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
         log::debug!("Flash read fn id was hit");
-        if pc as GuestAddr == conf.crashes_mmap_flash_read_fn {
+        if pc as GuestAddr == conf.crashes.mmap.flash_read_fn {
             let cpy_src: GuestAddr =
                 cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::R0).unwrap() as GuestAddr;
             let cpy_dest_start: GuestAddr =
@@ -297,19 +298,19 @@ where
                 cpy_dest_start,
                 cpy_len
             );
-            for area in &conf.crashes_mmap_no_write_flash_fn {
-                if (area.0 >= cpy_dest_start && area.0 < cpy_dest_end)
-                    || (area.1 >= cpy_dest_start && area.1 < cpy_dest_end)
+            for area in &conf.crashes.mmap.no_write_flash_fn {
+                if (area.begin >= cpy_dest_start && area.begin < cpy_dest_end)
+                    || (area.end >= cpy_dest_start && area.end < cpy_dest_end)
                 {
                     log::debug!(
                         "Flash read fn writes to [{:#010x}, {:#010x}]",
-                        area.0,
-                        area.1
+                        area.begin,
+                        area.end
                     );
                     let cpy_lr: GuestAddr =
                         cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::Lr).unwrap() as GuestAddr;
                     log::debug!("Flash read fn called from {:#010x}", cpy_lr);
-                    if !area.2.contains(&cpy_lr) {
+                    if !area.holes.contains(&cpy_lr) {
                         log::info!("Flash read fn hook triggered!");
                         cpu.trigger_breakpoint();
                     }
@@ -338,7 +339,10 @@ where
     // TODO: for known write locations at "compile" time
     // Don't emit hooks if they are outside of range
     let conf = borrow_global_conf().unwrap();
-    for (_, _, no_write) in conf.crashes_mmap_no_write_hooks.iter() {
+    for RegionWithHoles {
+        holes: no_write, ..
+    } in conf.crashes.mmap.no_write_hooks.iter()
+    {
         for no_ldr in no_write {
             if pc == *no_ldr {
                 log::debug!("Skipping generation hook for {:#010x}", pc);
@@ -362,8 +366,8 @@ fn exec_writes_hook<QT: QemuHelperTuple<S>, S: UsesInput>(
     addr: GuestAddr,
 ) {
     let conf = borrow_global_conf().unwrap();
-    for &(lower_bound, upper_bound, _) in conf.crashes_mmap_no_write_hooks.iter() {
-        if addr >= lower_bound && addr < upper_bound {
+    for &RegionWithHoles { begin, end, .. } in conf.crashes.mmap.no_write_hooks.iter() {
+        if addr >= begin && addr < end {
             log::debug!("Execute writes:");
             log::debug!("> id: {:#x}", id);
             log::debug!("> addr: {:#x}", addr);
@@ -381,8 +385,8 @@ fn exec_writes_hook_n<QT: QemuHelperTuple<S>, S: UsesInput>(
     size: usize,
 ) {
     let conf = borrow_global_conf().unwrap();
-    for no_write in conf.crashes_mmap_no_write_hooks.iter() {
-        if addr >= no_write.0 && addr < no_write.1 {
+    for no_write in conf.crashes.mmap.no_write_hooks.iter() {
+        if addr >= no_write.begin && addr < no_write.end {
             log::debug!("Execute writes:");
             log::debug!("> id: {:#x}", id);
             log::debug!("> addr: {:#x}", addr);

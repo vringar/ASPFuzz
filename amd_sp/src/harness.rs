@@ -3,7 +3,7 @@ use std::process;
 use libafl::prelude::*;
 use libafl_bolts::{os::unix_signals::Signal, prelude::*};
 use libafl_qemu::{GuestAddr, Qemu, QemuExitError, QemuExitReason, QemuShutdownCause, Regs};
-use libasp::{get_run_conf, ExceptionType, Reset, ResetState};
+use libasp::{get_run_conf, ExceptionType, FixedConfig, Reset, ResetState};
 
 use crate::client::ON_CHIP_ADDR;
 
@@ -27,12 +27,12 @@ pub fn create_harness(
         // Reset emulator state
         if is_crash_snapshot {
             is_crash_snapshot = false;
-            rs.load(&emu, &conf.snapshot_on_crash);
-        } else if counter_snapshot >= conf.snapshot_period {
+            rs.load(&emu, &conf.snapshot.on_crash);
+        } else if counter_snapshot >= conf.snapshot.period {
             counter_snapshot = 0;
-            rs.load(&emu, &conf.snapshot_periodically);
+            rs.load(&emu, &conf.snapshot.periodically);
         } else {
-            rs.load(&emu, &conf.snapshot_default);
+            rs.load(&emu, &conf.snapshot.default);
         }
 
         #[cfg(feature = "debug")]
@@ -41,22 +41,22 @@ pub fn create_harness(
         // Input to memory
         let target = input.target_bytes();
         let mut target_buf = target.as_slice();
-        if target_buf.len() > conf.input_total_size {
-            target_buf = &target_buf[..conf.input_total_size];
+        if target_buf.len() > conf.input.total_size() {
+            target_buf = &target_buf[..conf.input.total_size()];
         }
-        let mut buffer = vec![0; conf.input_total_size];
+        let mut buffer = vec![0; conf.input.total_size()];
         buffer[..target_buf.len()].copy_from_slice(target_buf);
         let mut buffer = buffer.as_slice();
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
-        for mem in conf.input_mem.iter() {
+        for mem in conf.input.mem.iter() {
             unsafe {
-                write_flash_mem(mem.0, &buffer[..mem.1]);
+                write_flash_mem(mem.addr, &buffer[..mem.size]);
             }
-            buffer = &buffer[mem.1..];
+            buffer = &buffer[mem.size..];
         }
 
         // Fixed values to memory
-        for &(addr, value) in conf.input_fixed.iter() {
+        for &FixedConfig { addr, val: value } in conf.input.fixed.iter() {
             let buffer = value.to_ne_bytes();
             unsafe {
                 write_flash_mem(addr, &buffer);
@@ -83,7 +83,7 @@ pub fn create_harness(
         log::debug!("End at {:#x} with R0={:#x}", pc, r0);
         counter_snapshot += 1;
         // Look for crashes if no sink was hit
-        if !conf.harness_sinks.iter().any(|&v| v == pc as GuestAddr) {
+        if !conf.harness.sinks.iter().any(|&v| v == pc as GuestAddr) {
             // Don't trigger on exceptions
             if !(ON_CHIP_ADDR..(ON_CHIP_ADDR + 4 * ExceptionType::UNKNOWN as u32))
                 .contains(&(pc as u32))

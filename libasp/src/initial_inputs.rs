@@ -1,7 +1,9 @@
 /// Generate initial inputs for the fuzzer based on provided UEFI images
 use libafl_qemu::GuestAddr;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+
+use crate::MemConfig;
 
 pub struct InitialInput {}
 
@@ -18,8 +20,8 @@ impl InitialInput {
 
     pub fn create_initial_inputs(
         &self,
-        flash_base: &[String],
-        input_mem: &[(GuestAddr, usize)],
+        flash_base: &[PathBuf],
+        input_mem: &[MemConfig],
         flash_size: GuestAddr,
         input_total_size: usize,
         input_dir: PathBuf,
@@ -31,14 +33,15 @@ impl InitialInput {
         }
         for (i, base) in flash_base.iter().enumerate() {
             let mut new_input_image = Vec::<u8>::new();
-            let image: Vec<u8> = fs::read(Path::new(base)).unwrap();
+            assert!(base.exists());
+            let image: Vec<u8> = fs::read(base).unwrap();
             for mem in input_mem.iter() {
                 assert!(
-                    mem.0 < flash_size && (mem.1 as GuestAddr) < flash_size,
+                    mem.addr < flash_size && (mem.size as GuestAddr) < flash_size,
                     "Memory region outsize of flash memory size"
                 );
-                let mem_section = &image
-                    [((mem.0 & 0x00FF_FFFF) as usize)..((mem.0 & 0x00FF_FFFF) as usize) + mem.1];
+                let mem_section = &image[((mem.addr & 0x00FF_FFFF) as usize)
+                    ..((mem.addr & 0x00FF_FFFF) as usize) + mem.size];
                 new_input_image.extend_from_slice(mem_section);
             }
             if input_total_size != new_input_image.len() {
