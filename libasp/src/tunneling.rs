@@ -4,23 +4,39 @@ use log;
 
 use crate::YAMLConfig;
 
-pub fn setup_tunnels<QT,S>(hooks: &QemuHooks<QT,S>, config: &YAMLConfig) where QT: QemuHelperTuple<S>, S:UsesInput{
+pub fn setup_tunnels<QT, S>(hooks: &QemuHooks<QT, S>, config: &YAMLConfig)
+where
+    QT: QemuHelperTuple<S>,
+    S: UsesInput,
+{
     for (addr, action) in &config.tunnels_cmps {
         let addr = *addr;
         if let Ok(constant) = action.parse::<GuestReg>() {
-            hooks.instruction(addr, Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT,S>, _state, _unkown| {
-                log::debug!("Tunnel - Constant [{:#x}, {}]", addr, constant);
-                hks.qemu().write_reg(Regs::R0, constant).unwrap();
-            })), false)
+            hooks.instruction(
+                addr,
+                Hook::Closure(Box::new(
+                    move |hks: &mut QemuHooks<QT, S>, _state, _unkown| {
+                        log::debug!("Tunnel - Constant [{:#x}, {}]", addr, constant);
+                        hks.qemu().write_reg(Regs::R0, constant).unwrap();
+                    },
+                )),
+                false,
+            )
         } else {
             let source_register = str_reg_to_regs(action).unwrap();
             let action = action.clone();
-            hooks.instruction(addr, Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT,S>, _state, _unknown| {
-                log::debug!("Tunnel - Register [{:#x}, {}]", addr, action);
+            hooks.instruction(
+                addr,
+                Hook::Closure(Box::new(
+                    move |hks: &mut QemuHooks<QT, S>, _state, _unknown| {
+                        log::debug!("Tunnel - Register [{:#x}, {}]", addr, action);
 
-                let r0: u32 = hks.qemu().read_reg(source_register).unwrap();
-                hks.qemu().write_reg(Regs::R0, r0).unwrap();
-            })), false)
+                        let r0: u32 = hks.qemu().read_reg(source_register).unwrap();
+                        hks.qemu().write_reg(Regs::R0, r0).unwrap();
+                    },
+                )),
+                false,
+            )
         };
     }
 }

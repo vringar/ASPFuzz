@@ -1,14 +1,14 @@
-use std::fmt::Debug;
 use libafl::prelude::*;
 use libafl_bolts::prelude::*;
 use libafl_qemu::{
     edges::{edges_map_mut_ptr, EDGES_MAP_SIZE_IN_USE, MAX_EDGES_FOUND},
     sys::TCGTemp,
-    GuestAddr, Hook, MemAccessInfo, Qemu, QemuDrCovHelper, QemuEdgeCoverageHelper, QemuExecutor,
-    QemuExitReason, QemuHelperTuple, QemuHooks, QemuInstrumentationAddressRangeFilter, Regs,
+    GuestAddr, HasInstrumentationFilter, Hook, MemAccessInfo, Qemu, QemuDrCovHelper,
+    QemuEdgeCoverageHelper, QemuExecutor, QemuExitReason, QemuHelperTuple, QemuHooks,
+    QemuInstrumentationAddressRangeFilter, Regs,
 };
 use libasp::{
-    setup_tunnels, borrow_global_conf, get_run_conf, CustomMetadataFeedback, ExceptionFeedback,
+    borrow_global_conf, get_run_conf, setup_tunnels, CustomMetadataFeedback, ExceptionFeedback,
     ExceptionHandler, Reset, ResetLevel, ResetState,
 };
 use rangemap::RangeMap;
@@ -22,6 +22,7 @@ use std::{
     },
     time::Duration,
 };
+use std::{fmt::Debug, ops::Range};
 
 use crate::harness;
 pub const ON_CHIP_ADDR: GuestAddr = 0xffff_0000;
@@ -53,40 +54,6 @@ where
     let env: Vec<(String, String)> = env::vars().collect();
 
     let emu = Qemu::init(&qemu_args, &env).unwrap();
-    // Set fuzzing sinks
-    for sink in &conf.harness_sinks {
-        emu.set_breakpoint(*sink);
-    }
-
-    // Configure ResetState and ExceptionHandler helpers
-    let mut rs = ResetState::new(conf.qemu_sram_size);
-    let mut eh = ExceptionHandler::new(ON_CHIP_ADDR);
-
-    // Go to FUZZ_START
-    let addr = conf.harness_start;
-    emu.set_breakpoint(addr);
-    unsafe {
-        match emu.run() {
-            Ok(QemuExitReason::Breakpoint(guest_addr)) => {
-                assert_eq!(guest_addr, conf.harness_start);
-                println!("Guest addr: {guest_addr}, Conf harness: {addr}")
-            }
-            _ => panic!("Unexpected QEMU exit."),
-        }
-    };
-    emu.remove_breakpoint(conf.harness_start);
-    let cpu = emu.current_cpu().unwrap(); // ctx switch safe
-    let pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
-    log::debug!("#### First exit at {:#x} ####", pc);
-
-    // Save emulator state
-    rs.save(&emu, &ResetLevel::RustSnapshot);
-    // Catching exceptions
-    eh.start(&emu);
-    // Setup crash breakpoints
-    for bp in &conf.crashes_breakpoints {
-        emu.set_breakpoint(*bp);
-    }
 
     // Create an observation channel using the coverage map
     let edges_observer = unsafe {
@@ -145,6 +112,45 @@ where
 
     let mut hooks = setup_hooks(log_dir, emu, conf);
 
+    // Set fuzzing sinks
+    for sink in &conf.harness_sinks {
+        emu.set_breakpoint(*sink);
+    }
+
+    // Configure ResetState and ExceptionHandler helpers
+    let mut rs = ResetState::new(conf.qemu_sram_size);
+    let mut eh = ExceptionHandler::new(ON_CHIP_ADDR);
+
+    // Go to FUZZ_START
+    let addr = conf.harness_start;
+    emu.set_breakpoint(addr);
+    unsafe {
+        match emu.run() {
+            Ok(QemuExitReason::Breakpoint(guest_addr)) => {
+                assert_eq!(guest_addr, conf.harness_start);
+                println!("Guest addr: {guest_addr}, Conf harness: {addr}")
+            }
+            _ => panic!("Unexpected QEMU exit."),
+        }
+    };
+    emu.remove_breakpoint(conf.harness_start);
+    hooks
+        .helpers_mut()
+        .match_first_type_mut::<QemuDrCovHelper>()
+        .unwrap()
+        .update_filter(QemuInstrumentationAddressRangeFilter::None, &emu);
+    let cpu = emu.current_cpu().unwrap(); // ctx switch safe
+    let pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
+    log::debug!("#### First exit at {:#x} ####", pc);
+    // Save emulator state
+    rs.save(&emu, &ResetLevel::RustSnapshot);
+    // Catching exceptions
+    eh.start(&emu);
+    // Setup crash breakpoints
+    for bp in &conf.crashes_breakpoints {
+        emu.set_breakpoint(*bp);
+    }
+
     // The closure that we want to fuzz
     let mut harness = harness::create_harness(rs, emu);
     let timeout = Duration::new(5, 0); // 5sec
@@ -184,7 +190,11 @@ where
     Ok(())
 }
 
-fn setup_hooks(log_dir: PathBuf, emu: Qemu, conf: &libasp::YAMLConfig) -> Box<QemuHooks<impl QemuHelperTuple<MyState> + Debug, MyState>> {
+fn setup_hooks(
+    log_dir: PathBuf,
+    emu: Qemu,
+    conf: &libasp::YAMLConfig,
+) -> Box<QemuHooks<impl QemuHelperTuple<MyState> + Debug, MyState>> {
     // Configure DrCov helper
     let mut log_drcov_path = log_dir.clone();
     log_drcov_path.push("drcov.log");
@@ -195,18 +205,16 @@ fn setup_hooks(log_dir: PathBuf, emu: Qemu, conf: &libasp::YAMLConfig) -> Box<Qe
         0x0_usize..0xffff_9000_usize,
         (0, "on-chip-ryzen-zen.bl".to_string()),
     );
-
+    let filter = QemuInstrumentationAddressRangeFilter::DenyList(vec![Range {
+        start: 0x0_u32,
+        end: 0xffff_9000_u32,
+    }]);
     // Configure QEMU hook helper
     let hooks = QemuHooks::new(
         emu,
         tuple_list!(
             QemuEdgeCoverageHelper::default(),
-            QemuDrCovHelper::new(
-                QemuInstrumentationAddressRangeFilter::None,
-                rangemap,
-                log_drcov_path,
-                false,
-            ),
+            QemuDrCovHelper::new(filter, rangemap, log_drcov_path, false,),
         ),
     );
     setup_tunnels(&hooks, conf);
