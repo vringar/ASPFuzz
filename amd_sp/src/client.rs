@@ -1,3 +1,4 @@
+use std::fmt::Debug;
 use libafl::prelude::*;
 use libafl_bolts::prelude::*;
 use libafl_qemu::{
@@ -7,7 +8,7 @@ use libafl_qemu::{
     QemuExitReason, QemuHelperTuple, QemuHooks, QemuInstrumentationAddressRangeFilter, Regs,
 };
 use libasp::{
-    add_tunnels_cmp, borrow_global_conf, get_run_conf, CustomMetadataFeedback, ExceptionFeedback,
+    setup_tunnels, borrow_global_conf, get_run_conf, CustomMetadataFeedback, ExceptionFeedback,
     ExceptionHandler, Reset, ResetLevel, ResetState,
 };
 use rangemap::RangeMap;
@@ -82,10 +83,6 @@ where
     rs.save(&emu, &ResetLevel::RustSnapshot);
     // Catching exceptions
     eh.start(&emu);
-    // Setup tunnels cmps
-    for cmp in &conf.tunnels_cmps {
-        add_tunnels_cmp(cmp.0, &cmp.1, &emu);
-    }
     // Setup crash breakpoints
     for bp in &conf.crashes_breakpoints {
         emu.set_breakpoint(*bp);
@@ -146,50 +143,8 @@ where
     // A fuzzer with feedbacks and a corpus scheduler
     let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
 
-    // Configure DrCov helper
-    let mut log_drcov_path = log_dir.clone();
-    log_drcov_path.push("drcov.log");
-    let mut rangemap = RangeMap::<usize, (u16, String)>::new();
+    let mut hooks = setup_hooks(log_dir, emu, conf);
 
-    // TODO: Should this be dynamic?
-    rangemap.insert(
-        0x0_usize..0xffff_9000_usize,
-        (0, "on-chip-ryzen-zen.bl".to_string()),
-    );
-
-    // Configure QEMU hook helper
-    let mut hooks = QemuHooks::new(
-        emu,
-        tuple_list!(
-            QemuEdgeCoverageHelper::default(),
-            QemuDrCovHelper::new(
-                QemuInstrumentationAddressRangeFilter::None,
-                rangemap,
-                log_drcov_path,
-                false,
-            )
-        ),
-    );
-
-    // Block hooks and write hooks for crash detection
-    hooks.blocks(
-        Hook::Function(gen_block_hook),
-        Hook::Empty,
-        Hook::Function(exec_block_hook),
-    );
-    if !conf.crashes_mmap_no_write_hooks.is_empty() {
-        log::debug!("Adding write generation hooks");
-        hooks.writes(
-            Hook::Function(gen_writes_hook),
-            Hook::Function(exec_writes_hook),
-            Hook::Function(exec_writes_hook),
-            Hook::Function(exec_writes_hook),
-            Hook::Function(exec_writes_hook),
-            Hook::Function(exec_writes_hook_n),
-        );
-    } else {
-        log::debug!("No write generation hooks");
-    }
     // The closure that we want to fuzz
     let mut harness = harness::create_harness(rs, emu);
     let timeout = Duration::new(5, 0); // 5sec
@@ -227,6 +182,54 @@ where
     log::info!("Ending fuzzing loop");
     println!("END fuzzing loop");
     Ok(())
+}
+
+fn setup_hooks(log_dir: PathBuf, emu: Qemu, conf: &libasp::YAMLConfig) -> Box<QemuHooks<impl QemuHelperTuple<MyState> + Debug, MyState>> {
+    // Configure DrCov helper
+    let mut log_drcov_path = log_dir.clone();
+    log_drcov_path.push("drcov.log");
+    let mut rangemap = RangeMap::<usize, (u16, String)>::new();
+
+    // TODO: Should this be dynamic?
+    rangemap.insert(
+        0x0_usize..0xffff_9000_usize,
+        (0, "on-chip-ryzen-zen.bl".to_string()),
+    );
+
+    // Configure QEMU hook helper
+    let hooks = QemuHooks::new(
+        emu,
+        tuple_list!(
+            QemuEdgeCoverageHelper::default(),
+            QemuDrCovHelper::new(
+                QemuInstrumentationAddressRangeFilter::None,
+                rangemap,
+                log_drcov_path,
+                false,
+            ),
+        ),
+    );
+    setup_tunnels(&hooks, conf);
+    // Block hooks and write hooks for crash detection
+    hooks.blocks(
+        Hook::Function(gen_block_hook),
+        Hook::Empty,
+        Hook::Function(exec_block_hook),
+    );
+    if !conf.crashes_mmap_no_write_hooks.is_empty() {
+        log::debug!("Adding write generation hooks");
+        hooks.writes(
+            Hook::Function(gen_writes_hook),
+            Hook::Function(exec_writes_hook),
+            Hook::Function(exec_writes_hook),
+            Hook::Function(exec_writes_hook),
+            Hook::Function(exec_writes_hook),
+            Hook::Function(exec_writes_hook_n),
+        );
+    } else {
+        log::debug!("No write generation hooks");
+    }
+    hooks
 }
 
 static COUNTER_WRITE_HOOKS: AtomicU64 = AtomicU64::new(0);

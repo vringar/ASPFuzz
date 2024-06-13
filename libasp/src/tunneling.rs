@@ -1,37 +1,33 @@
+use libafl::inputs::UsesInput;
 use libafl_qemu::*;
 use log;
 
-static mut TUNNELS_CMPS: Vec<(GuestAddr, String)> = vec![];
+use crate::YAMLConfig;
 
-pub fn add_tunnels_cmp(addr: GuestAddr, r0: &str, emu: &Qemu) {
-    let cmp = (addr, r0.to_string());
-    unsafe {
-        TUNNELS_CMPS.push(cmp);
-    }
-    emu.set_hook(emu as *const _ as u64, addr, tunnels_cmp_hook, false);
-}
+pub fn setup_tunnels<QT,S>(hooks: &QemuHooks<QT,S>, config: &YAMLConfig) where QT: QemuHelperTuple<S>, S:UsesInput{
+    for (addr, action) in &config.tunnels_cmps {
+        let addr = *addr;
+        if let Ok(constant) = action.parse::<GuestReg>() {
+            hooks.instruction(addr, Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT,S>, _state, _unkown| {
+                log::debug!("Tunnel - Constant [{:#x}, {}]", addr, constant);
+                hks.qemu().write_reg(Regs::R0, constant).unwrap();
+            })), false)
+        } else {
+            let source_register = str_reg_to_regs(action).unwrap();
+            let action = action.clone();
+            hooks.instruction(addr, Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT,S>, _state, _unknown| {
+                log::debug!("Tunnel - Register [{:#x}, {}]", addr, action);
 
-extern "C" fn tunnels_cmp_hook(data: u64, pc: GuestAddr) {
-    log::debug!("Tunnels cmp hook: pc={:#x}", pc);
-    let emu = unsafe { (data as *const Qemu).as_ref().unwrap() };
-    for cmp in unsafe { TUNNELS_CMPS.iter() } {
-        if cmp.0 == pc {
-            log::debug!("Found matching tunnels cmp: [{:#x}, {}]", cmp.0, cmp.1);
-            if cmp.1.parse::<GuestAddr>().is_ok() {
-                emu.write_reg(Regs::R0, cmp.1.parse::<u32>().unwrap())
-                    .unwrap();
-                break;
-            } else {
-                let r0: u32 = emu.read_reg(str_reg_to_regs(&cmp.1)).unwrap();
-                emu.write_reg(Regs::R0, r0).unwrap();
-                break;
-            }
-        }
+                let r0: u32 = hks.qemu().read_reg(source_register).unwrap();
+                hks.qemu().write_reg(Regs::R0, r0).unwrap();
+            })), false)
+        };
     }
 }
 
-pub fn str_reg_to_regs(reg: &str) -> Regs {
-    match reg {
+/// As we do not own the Regs type this is the best we can do
+pub fn str_reg_to_regs(reg: &str) -> Option<Regs> {
+    Some(match reg {
         "R0" => Regs::R0,
         "R1" => Regs::R1,
         "R2" => Regs::R2,
@@ -65,6 +61,6 @@ pub fn str_reg_to_regs(reg: &str) -> Regs {
         "IP" => Regs::Ip,
         "Cpsr" => Regs::Cpsr,
         "CPSR" => Regs::Cpsr,
-        _ => panic!("Cannot match to valid ARM register"),
-    }
+        _ => return None,
+    })
 }
