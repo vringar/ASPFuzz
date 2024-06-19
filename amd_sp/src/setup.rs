@@ -3,11 +3,7 @@ use clap::{command, Parser};
 
 use libasp::{borrow_global_conf, init_global_conf};
 
-use std::{
-    env,
-    path::PathBuf,
-    process::exit,
-};
+use std::{env, path::PathBuf, process::exit};
 
 /// Fuzzing the on-chip-bootloader from different AMD Zen generations.
 #[derive(Parser, Debug)]

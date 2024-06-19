@@ -8,8 +8,8 @@ use libafl_qemu::{
     QemuInstrumentationAddressRangeFilter, Regs,
 };
 use libasp::{
-    borrow_global_conf, get_run_conf, setup_tunnels, CustomMetadataFeedback, ExceptionFeedback,
-    ExceptionHandler, RegionWithHoles, Reset, ResetLevel, ResetState,
+    borrow_global_conf, get_run_conf, CustomMetadataFeedback, ExceptionFeedback, ExceptionHandler,
+    RegionWithHoles, Reset, ResetLevel, ResetState,
 };
 use rangemap::RangeMap;
 use std::fmt::Debug;
@@ -136,8 +136,7 @@ where
     };
     emu.remove_breakpoint(conf.harness.start);
     hooks
-        .helpers_mut()
-        .match_first_type_mut::<QemuDrCovHelper>()
+        .match_helper_mut::<QemuDrCovHelper>()
         .unwrap()
         .update_filter(QemuInstrumentationAddressRangeFilter::None, &emu);
     let cpu = emu.current_cpu().unwrap(); // ctx switch safe
@@ -218,7 +217,7 @@ fn setup_hooks(
             QemuDrCovHelper::new(filter, rangemap, log_drcov_path, false,),
         ),
     );
-    setup_tunnels(&hooks, conf);
+    conf.tunnels.setup(&hooks);
     // Block hooks and write hooks for crash detection
     hooks.blocks(
         Hook::Function(gen_block_hook),
@@ -245,6 +244,7 @@ static COUNTER_WRITE_HOOKS: AtomicU64 = AtomicU64::new(0);
 static COUNTER_EDGE_HOOKS: AtomicU64 = AtomicU64::new(0);
 static FLASH_READ_HOOK_ID: OnceLock<u64> = OnceLock::new();
 
+struct FlashHookConfig {}
 fn gen_block_hook<QT, S>(
     hooks: &mut QemuHooks<QT, S>,
     _id: Option<&mut S>,
@@ -254,6 +254,7 @@ where
     S: UsesInput,
     QT: QemuHelperTuple<S>,
 {
+    let state: Option<&mut FlashHookConfig> = hooks.match_helper_mut();
     let id = COUNTER_EDGE_HOOKS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let conf = borrow_global_conf().unwrap();
     for no_exec in conf.crashes.mmap.no_exec.iter() {

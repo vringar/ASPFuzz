@@ -1,4 +1,5 @@
 use crate::reset_state::ResetLevel;
+use crate::TunnelConfig;
 /// Parsing the YAML config file
 use libafl_qemu::*;
 use serde::Deserialize;
@@ -84,18 +85,6 @@ pub struct HarnessConfig {
     pub start: GuestAddr,
     pub sinks: Vec<GuestAddr>,
 }
-#[derive(Deserialize, Debug)]
-pub struct CmpConfig {
-    #[serde(alias = "addr")]
-    pub addr: GuestAddr,
-    #[serde(alias = "r0")]
-    pub value: String,
-}
-#[derive(Deserialize, Debug)]
-pub struct TunnelConfig {
-    pub cmps: Vec<CmpConfig>,
-}
-
 #[derive(Deserialize, Debug)]
 pub struct NoExecConfig {
     pub begin: GuestAddr,

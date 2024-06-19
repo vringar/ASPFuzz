@@ -1,52 +1,108 @@
+use std::fmt;
+
 use libafl::inputs::UsesInput;
 use libafl_qemu::*;
 use log;
+use serde::{
+    de::{self, Visitor},
+    Deserialize, Deserializer,
+};
+#[derive(Deserialize, Debug)]
+#[serde(tag = "action")]
 
-use crate::{CmpConfig, YAMLConfig};
+pub enum CmpAction {
+    CopyRegister {
+        #[serde(deserialize_with = "parse_regs")]
+        target: Regs,
+        #[serde(deserialize_with = "parse_regs")]
+        source: Regs,
+    },
+    SetConstant {
+        #[serde(deserialize_with = "parse_regs")]
+        target: Regs,
+        value: GuestReg,
+    },
+    Jump {
+        target: GuestAddr,
+    },
+}
+#[derive(Deserialize, Debug)]
+pub struct CmpConfig {
+    pub addr: GuestAddr,
+    #[serde(flatten)]
+    pub value: CmpAction,
+}
 
-pub fn setup_tunnels<QT, S>(hooks: &QemuHooks<QT, S>, config: &YAMLConfig)
-where
-    QT: QemuHelperTuple<S>,
-    S: UsesInput,
-{
-    for CmpConfig {
-        addr,
-        value: action,
-    } in &config.tunnels.cmps
+#[derive(Deserialize, Debug)]
+pub struct TunnelConfig {
+    pub cmps: Vec<CmpConfig>,
+}
+
+impl TunnelConfig {
+    pub fn setup<QT, S>(&self, hooks: &QemuHooks<QT, S>)
+    where
+        QT: QemuHelperTuple<S>,
+        S: UsesInput,
     {
-        let addr = *addr;
-        if let Ok(constant) = action.parse::<GuestReg>() {
-            hooks.instruction(
-                addr,
-                Hook::Closure(Box::new(
-                    move |hks: &mut QemuHooks<QT, S>, _state, _unkown| {
-                        log::debug!("Tunnel - Constant [{:#x}, {}]", addr, constant);
-                        hks.qemu().write_reg(Regs::R0, constant).unwrap();
-                    },
-                )),
-                false,
-            )
-        } else {
-            let source_register = str_reg_to_regs(action).unwrap();
-            let action = action.clone();
-            hooks.instruction(
-                addr,
-                Hook::Closure(Box::new(
-                    move |hks: &mut QemuHooks<QT, S>, _state, _unknown| {
-                        log::debug!("Tunnel - Register [{:#x}, {}]", addr, action);
+        for CmpConfig {
+            addr,
+            value: action,
+        } in &self.cmps
+        {
+            let addr = *addr;
+            match *action {
+                CmpAction::SetConstant { target, value } => hooks.instruction(
+                    addr,
+                    Hook::Closure(Box::new(
+                        move |hks: &mut QemuHooks<QT, S>, _state, _unkown| {
+                            log::debug!("Tunnel - Constant [{:#x}, {}]", addr, value);
+                            hks.qemu().write_reg(target, value).unwrap();
+                        },
+                    )),
+                    false,
+                ),
+                CmpAction::CopyRegister { target, source } => hooks.instruction(
+                    addr,
+                    Hook::Closure(Box::new(
+                        move |hks: &mut QemuHooks<QT, S>, _state, _unknown| {
+                            log::debug!("Tunnel - Register [{:#x}, {:?}]", addr, source);
 
-                        let r0: u32 = hks.qemu().read_reg(source_register).unwrap();
-                        hks.qemu().write_reg(Regs::R0, r0).unwrap();
-                    },
-                )),
-                false,
-            )
-        };
+                            let reg_name: u32 = hks.qemu().read_reg(source).unwrap();
+                            hks.qemu().write_reg(target, reg_name).unwrap();
+                        },
+                    )),
+                    false,
+                ),
+                CmpAction::Jump { target } => todo!(),
+            };
+        }
     }
 }
 
+fn parse_regs<'de, D>(deserializer: D) -> Result<Regs, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct RegisterVisitor;
+    const VALUES: &[&str] = &["A valid Register name"];
+    impl<'de> Visitor<'de> for RegisterVisitor {
+        type Value = Regs;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("a valid Register name")
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Regs, E>
+        where
+            E: de::Error,
+        {
+            parse_regs2(value).ok_or(de::Error::unknown_field(value, VALUES))
+        }
+    }
+    deserializer.deserialize_str(RegisterVisitor)
+}
 /// As we do not own the Regs type this is the best we can do
-pub fn str_reg_to_regs(reg: &str) -> Option<Regs> {
+pub fn parse_regs2(reg: &str) -> Option<Regs> {
     Some(match reg {
         "R0" => Regs::R0,
         "R1" => Regs::R1,
@@ -83,4 +139,25 @@ pub fn str_reg_to_regs(reg: &str) -> Option<Regs> {
         "CPSR" => Regs::Cpsr,
         _ => return None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_register() {
+        #[derive(Deserialize, Debug)]
+
+        struct Test {
+            #[serde(deserialize_with = "parse_regs")]
+            target: Regs,
+        }
+        let text = "target: R0";
+        let t: Test = serde_yaml::from_str(text).unwrap();
+        match t.target {
+            Regs::R0 => {}
+            _ => panic!("Wrong Register"),
+        }
+    }
 }
