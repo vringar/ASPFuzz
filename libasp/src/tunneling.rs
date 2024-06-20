@@ -25,6 +25,10 @@ pub enum CmpAction {
     Jump {
         target: GuestAddr,
     },
+    LogRegister {
+        #[serde(deserialize_with = "parse_regs")]
+        target: Regs
+    }
 }
 #[derive(Deserialize, Debug)]
 pub struct CmpConfig {
@@ -55,7 +59,7 @@ impl TunnelConfig {
                     addr,
                     Hook::Closure(Box::new(
                         move |hks: &mut QemuHooks<QT, S>, _state, _unkown| {
-                            log::debug!("Tunnel - Constant [{:#x}, {}]", addr, value);
+                            log::debug!("Tunnel - Constant [{:#x}, {:?}, {:#x}]", addr, target, value);
                             hks.qemu().write_reg(target, value).unwrap();
                         },
                     )),
@@ -65,10 +69,10 @@ impl TunnelConfig {
                     addr,
                     Hook::Closure(Box::new(
                         move |hks: &mut QemuHooks<QT, S>, _state, _unknown| {
-                            log::debug!("Tunnel - Register [{:#x}, {:?}]", addr, source);
+                            log::debug!("Tunnel - Register [{:#x}, {:?}, {:?}]", addr, target, source);
 
-                            let reg_name: u32 = hks.qemu().read_reg(source).unwrap();
-                            hks.qemu().write_reg(target, reg_name).unwrap();
+                            let value: u32 = hks.qemu().read_reg(source).unwrap();
+                            hks.qemu().write_reg(target, value).unwrap();
                         },
                     )),
                     false,
@@ -84,6 +88,10 @@ impl TunnelConfig {
                     )),
                     false,
                 ),
+                CmpAction::LogRegister { target } => hooks.instruction(addr, Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _unknown| {
+                    let value: u32 = hks.qemu().read_reg(target).unwrap();
+                    log::debug!("Tunnel - Log [{:#x}, {:?}, {:#x}]", addr, target, value);
+                })), false)
             };
         }
     }

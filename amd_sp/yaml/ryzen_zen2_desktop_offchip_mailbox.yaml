@@ -13,7 +13,7 @@ flash:
   # Start of flash mmap area in cpu physical memory
   start_cpu: 0x02000000
   # Base image in flash memory
-  base: "bins/TUF-GAMING-B450-PLUS-II-ASUS-4202.ROM"
+  base: "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
 
 input:
   initial:
@@ -68,6 +68,10 @@ tunnels:
       action: SetConstant
       target: R0
       value: 0x1
+    # See ret val of parse_psp_dir
+    - addr: 0xffff2ce4
+      action: LogRegister
+      target: R0
 
 crashes:
   # Breakpoints as crashes
