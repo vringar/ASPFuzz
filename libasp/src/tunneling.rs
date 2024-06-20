@@ -73,7 +73,17 @@ impl TunnelConfig {
                     )),
                     false,
                 ),
-                CmpAction::Jump { target } => todo!(),
+                CmpAction::Jump { target } => hooks.instruction(
+                    addr,
+                    Hook::Closure(Box::new(
+                        move |hks: &mut QemuHooks<QT, S>, _state, _unknown| {
+                            log::debug!("Tunnel - Jump [{:#x}, {:#x}]", addr, target);
+
+                            hks.qemu().write_reg(Regs::Ip, target).unwrap();
+                        },
+                    )),
+                    false,
+                ),
             };
         }
     }
@@ -89,7 +99,7 @@ where
         type Value = Regs;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("a valid Register name")
+            formatter.write_str("A valid Register name")
         }
 
         fn visit_str<E>(self, value: &str) -> Result<Regs, E>

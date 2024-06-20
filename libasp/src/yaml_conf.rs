@@ -197,4 +197,11 @@ mod tests {
         println!("CARGO PATH IS {}", d.display());
         YAMLConfig::new(&d.join("../amd_sp/yaml/ryzen_zen+_desktop_parse_asp_flash.yaml"));
     }
+
+    #[test]
+    fn read_mailbox() {
+        let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        println!("CARGO PATH IS {}", d.display());
+        YAMLConfig::new(&d.join("../amd_sp/yaml/ryzen_zen2_desktop_offchip_mailbox.yaml"));
+    }
 }

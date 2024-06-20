@@ -1,0 +1,91 @@
+# QEMU configuration
+qemu:
+  # Zen generation to emulate
+  zen: "Zen2"
+  # On-chip bootloader to use
+  on_chip_bl_path: "bins/on-chip-bl-Ryzen-Zen2-Desktop"
+# Flash informations
+flash:
+  # Start of flash mmap in SMN memory space
+  start_smn: 0x44000000
+  # Size of flash memory
+  size: 0x01000000
+  # Start of flash mmap area in cpu physical memory
+  start_cpu: 0x02000000
+  # Base image in flash memory
+  base: "bins/TUF-GAMING-B450-PLUS-II-ASUS-4202.ROM"
+
+input:
+  initial:
+    # No initial content
+  mem:
+    # # Mailbox and Pointer
+    # - addr: 0x03010570
+    #   size: 0xc
+    - addr: 0x20
+      size: 0x10
+  fixed:
+    # - addr: 0x000108ae
+    #   val: 0x1
+
+# Harness
+# harness:
+#   # cold_boot call to x86_workloop
+#   start: 0x00002b8c
+#   sinks:
+#     # sts_report_to_x86_hang_on_error in loop
+#     - 0x00007274
+#     # exited workloop
+#     - 0x000093f0
+#     # wait_for_irq_or_work waiting for interrupt
+#     - 0x00000210 
+
+# Harness
+harness:
+  # parse_psp_flash() after on_chip_bl_init_SPI_maybe()
+  start: 0xffff2c00
+  sinks:
+    # on_chip_bl_post_status_code_maybe() in loop wfi
+    - 0xffff05c0
+    # call_off_chip
+    - 0x00001212
+
+# Tunnels describe any fixup that has to happen during execution
+# at a certain address
+tunnels:
+  cmps:
+    # Skip to x86_workloop in cold boot
+    - addr: 0x02b0e
+      action: Jump
+      target: 0x2a22
+    # fix function in x86_workloop
+    - addr: 0x9236
+      action: SetConstant
+      target: R0
+      value: 0x0
+    # overwrite of 0x100ac
+    - addr: 0x06988
+      action: SetConstant
+      target: R0
+      value: 0x1
+
+crashes:
+  # Breakpoints as crashes
+  breakpoints:
+  mmap:
+    no_exec:
+    # TODO: figure out relevant regions
+    flash_read_fn: 0x000
+    no_write_flash_fn:
+    no_write_hooks:
+
+# Snapshotting behaviour:
+# - Use enum for "default", "on_crash", "periodically":
+#   ["SuperLazy", "Lazy", "RustSnapshot", "HardReset"]
+# - "period":
+#   number of testcases before running state_rest "periodically"
+snapshot:
+  default: "SuperLazy"
+  on_crash: "HardReset"
+  periodically: "RustSnapshot"
+  period: 100000

@@ -207,7 +207,7 @@ fn setup_hooks(
     );
     let filter = QemuInstrumentationAddressRangeFilter::DenyList(vec![Range {
         start: 0x0_u32,
-        end: 0xffff_9000_u32,
+        end: 0xffff_ffff_u32,
     }]);
     // Configure QEMU hook helper
     let hooks = QemuHooks::new(

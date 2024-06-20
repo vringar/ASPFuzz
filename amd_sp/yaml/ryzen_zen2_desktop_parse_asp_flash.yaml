@@ -71,13 +71,13 @@ tunnels:
     # on_chip_bl_fletscher32() #1
     - addr: 0xffff2058
       action: CopyRegister
-      target: "R0"
-      source: "R3"
+      target: R0
+      source: R3
     # on_chip_bl_fletscher32() #2
     - addr: 0xffff2114
       action: CopyRegister
-      target: "R0"
-      source: "R3"
+      target: R0
+      source: R3
 
 # Define what crashes are
 crashes:
