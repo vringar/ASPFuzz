@@ -39,6 +39,7 @@
           )
         ];
         pkgs = import nixpkgs {inherit overlays system;};
+        # Things needed to build the software
         nativeBuildInputs = with pkgs; [
           rustToolchain
           cargo-make
@@ -56,9 +57,12 @@
           python311Packages.libfdt
           python311
         ];
+
+        # Runtime dependencies
         buildInputs = with pkgs; [
           nettle
           zlib
+          z3
           glib
           libgcrypt
           llvmPackages_18.libcxx
@@ -84,6 +88,7 @@
             LIBCLANG_PATH = "${pkgs.llvmPackages_18.libclang.lib}/lib";
             CC = "${pkgs.llvmPackages_18.clang.out}/clang";
             CXX = "${pkgs.llvmPackages_18.clang.out}/clang++";
+            
           };
         }
     );
