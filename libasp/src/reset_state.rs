@@ -4,6 +4,7 @@ use std::fmt::{Debug, Formatter};
 use libafl_qemu::*;
 use log;
 use serde::Deserialize;
+use sys::SyxSnapshot;
 use std::fs::File;
 use std::io::Write;
 use std::str::FromStr;
@@ -14,7 +15,6 @@ const LAZY_SRAM_SIZE: GuestAddr = 0x1300;
 #[derive(Clone)]
 pub struct ResetState {
     saved: bool,
-    sram_size: GuestAddr,
     num_loads: usize,
     regs: Vec<u32>,
     sram: Vec<u8>,
@@ -23,6 +23,7 @@ pub struct ResetState {
     timer_control_0: u64,
     timer_control_1: u64,
     smn_slots: [u32; 32],
+    syx_snapshot: Option<*mut SyxSnapshot>
 }
 
 #[derive(Default, Deserialize)]
@@ -85,7 +86,6 @@ impl ResetState {
     pub fn new(sram_size: GuestAddr) -> Self {
         Self {
             saved: false,
-            sram_size,
             num_loads: 0,
             regs: vec![],
             sram: vec![0; sram_size.try_into().unwrap()],
@@ -94,6 +94,7 @@ impl ResetState {
             timer_control_0: 0,
             timer_control_1: 0,
             smn_slots: [0; 32],
+            syx_snapshot: None
         }
     }
 
@@ -123,6 +124,7 @@ impl ResetState {
         unsafe {
             self.smn_slots = aspfuzz_smn_slots;
         }
+        self.syx_snapshot = Some(emu.create_fast_snapshot(true));
         emu.save_snapshot("start", true);
     }
 
@@ -143,10 +145,11 @@ impl ResetState {
 
         // Resetting SRAM (predefined section)
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
+        let sram_size: u32 = self.sram.len().try_into().unwrap();
         let sram_slice =
-            &self.sram[((self.sram_size - LAZY_SRAM_SIZE) as usize)..(self.sram_size as usize)];
+            &self.sram[((sram_size - LAZY_SRAM_SIZE) as usize)..self.sram.len()];
         unsafe {
-            cpu.write_mem(self.sram_size - LAZY_SRAM_SIZE, sram_slice);
+            cpu.write_mem(sram_size - LAZY_SRAM_SIZE, sram_slice);
         }
     }
 
@@ -219,7 +222,7 @@ impl ResetState {
         log::debug!("CPU reset successful");
 
         // Zero SRAM
-        let zero_sram = vec![0; self.sram_size.try_into().unwrap()];
+        let zero_sram = vec![0; self.sram.len()];
         unsafe {
             cpu.write_mem(SRAM_START, &zero_sram);
         }

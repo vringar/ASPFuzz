@@ -68,7 +68,6 @@ impl<S> Feedback<S> for CustomMetadataFeedback
 where
     S: UsesInput + State,
 {
-    #[allow(clippy::wrong_self_convention)]
     fn is_interesting<EM, OT>(
         &mut self,
         _state: &mut S,
@@ -94,8 +93,9 @@ where
     ) -> Result<(), Error> {
         // Read regs
         let mut regs = Vec::new();
+        log::info!("Number of cpus is: {}", self.emulator.num_cpus());
         for r in Regs::iter() {
-            regs.push(self.emulator.read_reg(r).unwrap());
+            regs.push(self.emulator.cpu_from_index(0).read_reg(r).unwrap());
         }
         testcase.add_metadata(CustomMetadata::new(regs));
         Ok(())

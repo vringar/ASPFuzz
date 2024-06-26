@@ -88,7 +88,7 @@ where
             // RNG
             StdRand::with_seed(current_nanos()),
             // Corpus that will be evolved, we keep it in memory for performance
-            CachedOnDiskCorpus::new(input_dir.clone(), 100).unwrap(),
+            InMemoryCorpus::new(),
             // Corpus in which we store solutions,
             // on disk so the user can get them after stopping the fuzzer
             CachedOnDiskCorpus::new(cloned_solutions_dir, 100).unwrap(),
@@ -129,7 +129,7 @@ where
         match emu.run() {
             Ok(QemuExitReason::Breakpoint(guest_addr)) => {
                 assert_eq!(guest_addr, conf.harness.start);
-                println!("Guest addr: {guest_addr}, Conf harness: {addr}")
+                println!("Guest addr: {guest_addr:#x}, Conf harness: {addr:#x}")
             }
             _ => panic!("Unexpected QEMU exit."),
         }
@@ -163,8 +163,10 @@ where
         &mut mgr,
         timeout,
     )
-    .unwrap();
+    .expect("Failed to create QemuExecutor");
 
+    // Instead of calling the timeout handler and restart the process, trigger a breakpoint ASAP
+    // executor.break_on_timeout();
     if state.must_load_initial_inputs() {
         state
             .load_initial_inputs(&mut fuzzer, &mut executor, &mut mgr, &[input_dir.clone()])

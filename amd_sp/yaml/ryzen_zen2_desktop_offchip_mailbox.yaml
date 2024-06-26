@@ -29,26 +29,17 @@ input:
     #   val: 0x1
 
 # Harness
-# harness:
-#   # cold_boot call to x86_workloop
-#   start: 0x00002b8c
-#   sinks:
-#     # sts_report_to_x86_hang_on_error in loop
-#     - 0x00007274
-#     # exited workloop
-#     - 0x000093f0
-#     # wait_for_irq_or_work waiting for interrupt
-#     - 0x00000210 
-
-# Harness
 harness:
-  # parse_psp_flash() after on_chip_bl_init_SPI_maybe()
-  start: 0xffff2c00
+  # cold_boot call to x86_workloop # 0x00002b8c
+  # begin of cold_boot
+  start: 0x00002938 
   sinks:
-    # on_chip_bl_post_status_code_maybe() in loop wfi
-    - 0xffff05c0
-    # call_off_chip
-    - 0x00001212
+    # sts_report_to_x86_hang_on_error in loop
+    - 0x00007274
+    # exited workloop
+    - 0x000093f0
+    # wait_for_irq_or_work waiting for interrupt
+    - 0x00000210 
 
 # Tunnels describe any fixup that has to happen during execution
 # at a certain address
@@ -68,10 +59,7 @@ tunnels:
       action: SetConstant
       target: R0
       value: 0x1
-    # See ret val of parse_psp_dir
-    - addr: 0xffff2ce4
-      action: LogRegister
-      target: R0
+
 
 crashes:
   # Breakpoints as crashes

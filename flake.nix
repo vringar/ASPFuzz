@@ -9,7 +9,6 @@
       url = "github:oxalica/rust-overlay"; # A helper for Rust + Nix
       inputs = {
         nixpkgs.follows = "nixpkgs";
-        flake-utils.follows = "flake-utils";
       };
     };
   };
