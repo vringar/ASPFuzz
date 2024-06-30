@@ -9,9 +9,9 @@ flash:
   # Start of flash mmap in SMN memory space
   start_smn: 0x44000000
   # Size of flash memory
-  size: 0x01000000
+  size: 0x1000000
   # Start of flash mmap area in cpu physical memory
-  start_cpu: 0x02000000
+  start_cpu: 0x2000000
   # Base image in flash memory
   base: "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
 
@@ -25,23 +25,20 @@ input:
     - addr: 0x20
       size: 0x10
   fixed:
-    # - addr: 0x000108ae
+    # - addr: 0x0108ae
     #   val: 0x1
 
 # Harness
 harness:
-  # cold_boot call to x86_workloop # 0x00002b8c
-  # begin of cold_boot
-  start: 0x00002938
+  # cold_boot call to x86_workloop #
+  start:  0x2b8c
   sinks:
     # sts_report_to_x86_hang_on_error in loop
-    - 0x00007274
+    - 0x7274
     # exited workloop
-    - 0x000093f0
+    - 0x93f0
     # wait_for_irq_or_work waiting for interrupt
-    - 0x00000210
-    # Confirm that jump works
-    - 0x02a2e
+    - 0x0210
 
 
 # Tunnels describe any fixup that has to happen during execution
@@ -49,8 +46,9 @@ harness:
 tunnels:
   cmps:
     # Skip to x86_workloop in cold boot
-    - addr: 0x02b0e
+    - addr: 0x2938
       action: Jump
+      source: 0x2b0e
       target: 0x2b8a
     # fix function in x86_workloop
     - addr: 0x9236
@@ -63,9 +61,20 @@ tunnels:
       target: R0
       value: 0x1
     # SKIP ABL
-    - addr: 0x2a1c
+    - addr: 0x2938 # When the overwriting happens
       action: Jump
-      target: 0x2938
+      source: 0x2a1c # what gets overwritten
+      target: 0x2a2e # where to jump to
+    # Causing problems
+    - addr: 0x2b14
+      action: SetConstant
+      target: R0
+      value: 0x0
+    # Don't go into recovery loop
+    - addr: 0x9260
+      action: SetConstant
+      target: R0
+      value: 0x0
 
 
 crashes:
@@ -74,7 +83,7 @@ crashes:
   mmap:
     no_exec:
     # TODO: figure out relevant regions
-    flash_read_fn: 0x000
+    flash_read_fn: 0x0
     no_write_flash_fn:
     no_write_hooks:
 

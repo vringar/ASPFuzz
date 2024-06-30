@@ -23,6 +23,7 @@ pub enum CmpAction {
         value: GuestReg,
     },
     Jump {
+        source: GuestAddr,
         target: GuestAddr,
     },
     LogRegister {
@@ -83,15 +84,13 @@ impl TunnelConfig {
                     })),
                     false,
                 ),
-                CmpAction::Jump { target } => hooks.instruction(
+                CmpAction::Jump { source, target } => hooks.instruction(
                     addr,
-                    Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, pc| {
-                        let cur_pc: u32 = hks.qemu().read_reg(Regs::Pc).unwrap();
-                        assert_eq!(cur_pc, pc);
-                        let cpu = hks.qemu().current_cpu().unwrap();
-                        log::debug!("Tunnel - Jump [{:#x}, {:#x}]", cur_pc, target);
-                        log::debug!("{}", cpu.display_context());
-                        hks.qemu().write_reg(Regs::Pc, target).unwrap();
+                    Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _pc| {
+                        log::debug!("Tunnel - Jump [{:#x},{:#x}, {:#x}]", addr, source, target);
+                        let inst: [u8; 2] = generate_branch_call(source, target);
+                        // Patch the instruction by overwriting it
+                        unsafe { hks.qemu().write_mem(source, &inst) }
                         hks.qemu().flush_jit();
                     })),
                     true,
@@ -107,6 +106,18 @@ impl TunnelConfig {
             };
         }
     }
+}
+
+// TODO handle more encodings this is just the simplest encoding
+fn generate_branch_call(cur_pc: u32, target: u32) -> [u8; 2] {
+    let diff = i32::try_from(target).unwrap() - i32::try_from(cur_pc + 4).unwrap();
+    let diff = i16::try_from(diff).unwrap();
+    assert!((-2048..=2046).contains(&diff));
+    assert!(diff % 2 == 0);
+    let mask = (1i16 << 11) - 1;
+    let inst = 0b11100 << 11 | ((diff / 2) & mask);
+    println!("Diff: {:#x} Inst: {:b}", diff, inst);
+    inst.to_le_bytes()
 }
 
 fn parse_regs<'de, D>(deserializer: D) -> Result<Regs, D::Error>
@@ -189,5 +200,11 @@ mod tests {
             Regs::R0 => {}
             _ => panic!("Wrong Register"),
         }
+    }
+
+    #[test]
+    fn generate_good_branch() {
+        assert_eq!(generate_branch_call(0x00002a1c, 0x2a22), [0x01, 0xe0]);
+        assert_eq!(generate_branch_call(0x00002a1c, 0x2938), [0x8c, 0xe7]);
     }
 }
