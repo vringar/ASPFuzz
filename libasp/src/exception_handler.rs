@@ -125,33 +125,41 @@ impl ExceptionHandler {
 }
 
 extern "C" fn exception_hook(data: u64, pc: GuestAddr) {
-    log::debug!("Exception hook: pc={:#x}", pc);
-
     match ((pc - unsafe { EXCEPTION_VECTOR_BASE }) / 4).into() {
         ExceptionType::RESET => unsafe { HOOK_TRIGGERED |= 1 << ExceptionType::RESET as u8 },
         ExceptionType::UNDEF => unsafe { HOOK_TRIGGERED |= 1 << ExceptionType::UNDEF as u8 },
-        ExceptionType::SVC => unsafe { HOOK_TRIGGERED |= 1 << ExceptionType::SVC as u8 },
+        // ExceptionType::SVC => unsafe { HOOK_TRIGGERED |= 1 << ExceptionType::SVC as u8 },
+        ExceptionType::SVC => return,
         ExceptionType::PREAB => unsafe { HOOK_TRIGGERED |= 1 << ExceptionType::PREAB as u8 },
-        //ExceptionType::DATAB    => unsafe{ HOOK_TRIGGERED |= 1 << ExceptionType::DATAB as u8 },
-        ExceptionType::DATAB => log::info!("Data abort triggered"),
+        ExceptionType::DATAB => unsafe { HOOK_TRIGGERED |= 1 << ExceptionType::DATAB as u8 },
+        //ExceptionType::DATAB => log::info!("Data abort triggered"),
         ExceptionType::HYP => unsafe { HOOK_TRIGGERED |= 1 << ExceptionType::HYP as u8 },
         ExceptionType::IRQ => unsafe { HOOK_TRIGGERED |= 1 << ExceptionType::IRQ as u8 },
         ExceptionType::FIQ => unsafe { HOOK_TRIGGERED |= 1 << ExceptionType::FIQ as u8 },
         _ => log::error!("Unknown exception triggered"),
     }
+    let emu = unsafe { (data as *const Qemu).as_ref().unwrap() };
+    log::debug!("Exception hook: pc={:#x}", pc);
     match ((pc - unsafe { EXCEPTION_VECTOR_BASE }) / 4).into() {
         ExceptionType::RESET => log::debug!("Exception: RESET"),
-        ExceptionType::UNDEF => log::debug!("Exception: UNDEF"),
+        ExceptionType::UNDEF => {
+            let sp: u32 = emu.read_reg(Regs::Sp).unwrap();
+            let lr: u32 = emu.read_reg(Regs::Lr).unwrap();
+            log::debug!("Exception: UNDEF sp_undef: {sp:#x} lr_undef: {lr:#x}");
+        }
         ExceptionType::SVC => log::debug!("Exception: SVC"),
         ExceptionType::PREAB => log::debug!("Exception: PREAB"),
-        ExceptionType::DATAB => log::debug!("Exception: DATAB"),
+        ExceptionType::DATAB => {
+            let sp: u32 = emu.read_reg(Regs::Sp).unwrap();
+            let lr: u32 = emu.read_reg(Regs::Lr).unwrap();
+            log::debug!("Exception: DATAAB sp_undef: {sp:#x} lr_undef: {lr:#x}");
+        }
         ExceptionType::HYP => log::debug!("Exception: HYP"),
         ExceptionType::IRQ => log::debug!("Exception: IRQ"),
         ExceptionType::FIQ => log::debug!("Exception: FIQ"),
         _ => log::error!("Unknown exception triggered"),
     }
 
-    let emu = unsafe { (data as *const Qemu).as_ref().unwrap() };
     emu.current_cpu().unwrap().trigger_breakpoint();
 }
 

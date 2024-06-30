@@ -27,8 +27,8 @@ pub enum CmpAction {
     },
     LogRegister {
         #[serde(deserialize_with = "parse_regs")]
-        target: Regs
-    }
+        target: Regs,
+    },
 }
 #[derive(Deserialize, Debug)]
 pub struct CmpConfig {
@@ -57,41 +57,53 @@ impl TunnelConfig {
             match *action {
                 CmpAction::SetConstant { target, value } => hooks.instruction(
                     addr,
-                    Hook::Closure(Box::new(
-                        move |hks: &mut QemuHooks<QT, S>, _state, _unkown| {
-                            log::debug!("Tunnel - Constant [{:#x}, {:?}, {:#x}]", addr, target, value);
-                            hks.qemu().write_reg(target, value).unwrap();
-                        },
-                    )),
+                    Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _pc| {
+                        log::debug!(
+                            "Tunnel - Constant [{:#x}, {:?}, {:#x}]",
+                            addr,
+                            target,
+                            value
+                        );
+                        hks.qemu().write_reg(target, value).unwrap();
+                    })),
                     false,
                 ),
                 CmpAction::CopyRegister { target, source } => hooks.instruction(
                     addr,
-                    Hook::Closure(Box::new(
-                        move |hks: &mut QemuHooks<QT, S>, _state, _unknown| {
-                            log::debug!("Tunnel - Register [{:#x}, {:?}, {:?}]", addr, target, source);
+                    Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _pc| {
+                        log::debug!(
+                            "Tunnel - Register [{:#x}, {:?}, {:?}]",
+                            addr,
+                            target,
+                            source
+                        );
 
-                            let value: u32 = hks.qemu().read_reg(source).unwrap();
-                            hks.qemu().write_reg(target, value).unwrap();
-                        },
-                    )),
+                        let value: u32 = hks.qemu().read_reg(source).unwrap();
+                        hks.qemu().write_reg(target, value).unwrap();
+                    })),
                     false,
                 ),
                 CmpAction::Jump { target } => hooks.instruction(
                     addr,
-                    Hook::Closure(Box::new(
-                        move |hks: &mut QemuHooks<QT, S>, _state, _unknown| {
-                            log::debug!("Tunnel - Jump [{:#x}, {:#x}]", addr, target);
-
-                            hks.qemu().write_reg(Regs::Ip, target).unwrap();
-                        },
-                    )),
+                    Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, pc| {
+                        let cur_pc: u32 = hks.qemu().read_reg(Regs::Pc).unwrap();
+                        assert_eq!(cur_pc, pc);
+                        let cpu = hks.qemu().current_cpu().unwrap();
+                        log::debug!("Tunnel - Jump [{:#x}, {:#x}]", cur_pc, target);
+                        log::debug!("{}", cpu.display_context());
+                        hks.qemu().write_reg(Regs::Pc, target).unwrap();
+                        hks.qemu().flush_jit();
+                    })),
+                    true,
+                ),
+                CmpAction::LogRegister { target } => hooks.instruction(
+                    addr,
+                    Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _pc| {
+                        let value: u32 = hks.qemu().read_reg(target).unwrap();
+                        log::debug!("Tunnel - Log [{:#x}, {:?}, {:#x}]", addr, target, value);
+                    })),
                     false,
                 ),
-                CmpAction::LogRegister { target } => hooks.instruction(addr, Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _unknown| {
-                    let value: u32 = hks.qemu().read_reg(target).unwrap();
-                    log::debug!("Tunnel - Log [{:#x}, {:?}, {:#x}]", addr, target, value);
-                })), false)
             };
         }
     }

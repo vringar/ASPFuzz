@@ -32,14 +32,17 @@ input:
 harness:
   # cold_boot call to x86_workloop # 0x00002b8c
   # begin of cold_boot
-  start: 0x00002938 
+  start: 0x00002938
   sinks:
     # sts_report_to_x86_hang_on_error in loop
     - 0x00007274
     # exited workloop
     - 0x000093f0
     # wait_for_irq_or_work waiting for interrupt
-    - 0x00000210 
+    - 0x00000210
+    # Confirm that jump works
+    - 0x02a2e
+
 
 # Tunnels describe any fixup that has to happen during execution
 # at a certain address
@@ -48,7 +51,7 @@ tunnels:
     # Skip to x86_workloop in cold boot
     - addr: 0x02b0e
       action: Jump
-      target: 0x2a22
+      target: 0x2b8a
     # fix function in x86_workloop
     - addr: 0x9236
       action: SetConstant
@@ -59,6 +62,10 @@ tunnels:
       action: SetConstant
       target: R0
       value: 0x1
+    # SKIP ABL
+    - addr: 0x2a1c
+      action: Jump
+      target: 0x2938
 
 
 crashes:

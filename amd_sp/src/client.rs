@@ -26,14 +26,13 @@ use std::{
 };
 
 use crate::harness;
-pub const ON_CHIP_ADDR: GuestAddr = 0xffff_0000;
 
-type MyState = StdState<
-    BytesInput,
-    CachedOnDiskCorpus<BytesInput>,
-    RomuDuoJrRand,
-    CachedOnDiskCorpus<BytesInput>,
->;
+// TODO make this depedent on machine register
+// for exception handler base
+pub const ON_CHIP_ADDR: GuestAddr = 0x100;
+
+type MyState =
+    StdState<BytesInput, InMemoryCorpus<BytesInput>, RomuDuoJrRand, CachedOnDiskCorpus<BytesInput>>;
 
 pub fn run_client<SP>(
     qemu_args: Vec<String>,
@@ -66,8 +65,16 @@ where
         .track_indices()
     };
 
+    // Create an observation channel to keep track of the execution time
+    let time_observer = TimeObserver::new("time");
     // Feedback to rate the interestingness of an input
-    let mut feedback = MaxMapFeedback::new(&edges_observer);
+    // This one is composed by two Feedbacks in OR
+    let mut feedback = feedback_or!(
+        // New maximization map feedback linked to the edges observer and the feedback state
+        MaxMapFeedback::new(&edges_observer),
+        // Time feedback, this one does not need a feedback state
+        TimeFeedback::new(&time_observer)
+    );
 
     let objective_coverage_feedback =
         MaxMapFeedback::with_name("objective_coverage_feedback", &edges_observer);
@@ -84,6 +91,7 @@ where
     // create a State from scratch
     let cloned_solutions_dir = solutions_dir.clone();
     let mut state = state.unwrap_or_else(|| {
+        log::debug!("Creating new state");
         StdState::new(
             // RNG
             StdRand::with_seed(current_nanos()),
@@ -105,8 +113,8 @@ where
     state.set_max_size(conf.input.total_size());
 
     // TODO: There is a better scheduling policy??
-    // A queue policy to get testcasess from the corpus
-    let scheduler = QueueScheduler::new();
+    // A minimization+queue policy to get testcasess from the corpus
+    let scheduler = IndexesLenTimeMinimizerScheduler::new(&edges_observer, QueueScheduler::new());
 
     // A fuzzer with feedbacks and a corpus scheduler
     let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
@@ -117,7 +125,6 @@ where
     for sink in &conf.harness.sinks {
         emu.set_breakpoint(*sink);
     }
-
     // Configure ResetState and ExceptionHandler helpers
     let mut rs = ResetState::new(conf.flash.size);
     let mut eh = ExceptionHandler::new(ON_CHIP_ADDR);
@@ -153,11 +160,11 @@ where
 
     // The closure that we want to fuzz
     let mut harness = harness::create_harness(rs, emu);
-    let timeout = Duration::new(5, 0); // 5sec
+    let timeout = Duration::new(15, 0); // 5sec
     let mut executor = QemuExecutor::new(
         &mut hooks,
         &mut harness,
-        tuple_list!(edges_observer),
+        tuple_list!(edges_observer, time_observer),
         &mut fuzzer,
         &mut state,
         &mut mgr,
@@ -166,7 +173,8 @@ where
     .expect("Failed to create QemuExecutor");
 
     // Instead of calling the timeout handler and restart the process, trigger a breakpoint ASAP
-    // executor.break_on_timeout();
+    executor.break_on_timeout();
+
     if state.must_load_initial_inputs() {
         state
             .load_initial_inputs(&mut fuzzer, &mut executor, &mut mgr, &[input_dir.clone()])

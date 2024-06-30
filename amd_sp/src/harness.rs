@@ -18,6 +18,7 @@ pub fn create_harness(
     mut rs: ResetState,
     emu: Qemu,
 ) -> impl FnMut(&BytesInput) -> ExitKind + Clone {
+    // These variables are captured in the closure and persist across reruns
     let mut is_crash_snapshot = false;
     let mut counter_snapshot = 0;
     move |input| {
@@ -72,7 +73,13 @@ pub fn create_harness(
                 Ok(QemuExitReason::End(QemuShutdownCause::HostSignal(Signal::SigInterrupt))) => {
                     process::exit(CTRL_C_EXIT)
                 }
-                Err(QemuExitError::UnexpectedExit) => return ExitKind::Crash,
+                Err(QemuExitError::UnexpectedExit) => {
+                    log::error!(
+                        "Got unexpected crash at {:#x}",
+                        cpu.read_reg::<_, u32>(Regs::Pc).unwrap()
+                    );
+                    return ExitKind::Crash;
+                }
                 _ => panic!("Unexpected QEMU exit."),
             }
         };

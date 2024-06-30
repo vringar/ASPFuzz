@@ -202,6 +202,6 @@ mod tests {
     fn read_mailbox() {
         let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         println!("CARGO PATH IS {}", d.display());
-        YAMLConfig::new(&d.join("../amd_sp/yaml/ryzen_zen2_desktop_offchip_mailbox.yaml"));
+        YAMLConfig::new(&d.join("../amd_sp/yaml/mailbox.yaml"));
     }
 }

@@ -4,10 +4,10 @@ use std::fmt::{Debug, Formatter};
 use libafl_qemu::*;
 use log;
 use serde::Deserialize;
-use sys::SyxSnapshot;
 use std::fs::File;
 use std::io::Write;
 use std::str::FromStr;
+use sys::SyxSnapshot;
 
 const SRAM_START: GuestAddr = 0x0;
 const LAZY_SRAM_SIZE: GuestAddr = 0x1300;
@@ -23,7 +23,7 @@ pub struct ResetState {
     timer_control_0: u64,
     timer_control_1: u64,
     smn_slots: [u32; 32],
-    syx_snapshot: Option<*mut SyxSnapshot>
+    syx_snapshot: Option<*mut SyxSnapshot>,
 }
 
 #[derive(Default, Deserialize)]
@@ -94,7 +94,7 @@ impl ResetState {
             timer_control_0: 0,
             timer_control_1: 0,
             smn_slots: [0; 32],
-            syx_snapshot: None
+            syx_snapshot: None,
         }
     }
 
@@ -146,8 +146,7 @@ impl ResetState {
         // Resetting SRAM (predefined section)
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
         let sram_size: u32 = self.sram.len().try_into().unwrap();
-        let sram_slice =
-            &self.sram[((sram_size - LAZY_SRAM_SIZE) as usize)..self.sram.len()];
+        let sram_slice = &self.sram[((sram_size - LAZY_SRAM_SIZE) as usize)..self.sram.len()];
         unsafe {
             cpu.write_mem(sram_size - LAZY_SRAM_SIZE, sram_slice);
         }

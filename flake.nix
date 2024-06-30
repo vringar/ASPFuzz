@@ -87,7 +87,6 @@
             LIBCLANG_PATH = "${pkgs.llvmPackages_18.libclang.lib}/lib";
             CC = "${pkgs.llvmPackages_18.clang.out}/clang";
             CXX = "${pkgs.llvmPackages_18.clang.out}/clang++";
-            
           };
         }
     );

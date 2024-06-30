@@ -270,9 +270,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.100"
+version = "1.0.101"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c891175c3fb232128f48de6590095e59198bbeb8620c310be349bfc3afd12c7b"
+checksum = "ac367972e516d45567c7eafc73d24e1c193dcf200a8d94e9db7b3d38b349572d"
 dependencies = [
  "jobserver",
  "libc",
@@ -459,9 +459,9 @@ dependencies = [
 
 [[package]]
 name = "either"
-version = "1.12.0"
+version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3dca9240753cf90908d7e4aac30f630662b02aebaa1b58a3cadabdb23385b58b"
+checksum = "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0"
 
 [[package]]
 name = "embedded-io"
@@ -734,7 +734,7 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 [[package]]
 name = "libafl"
 version = "0.13.0"
-source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#c93121c94a214c06e68eeb138c55a22009934b05"
+source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#cfcb651f90a1bb38522ce4614efbfbc9fc1ec457"
 dependencies = [
  "ahash",
  "backtrace",
@@ -767,7 +767,7 @@ dependencies = [
 [[package]]
 name = "libafl_bolts"
 version = "0.13.0"
-source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#c93121c94a214c06e68eeb138c55a22009934b05"
+source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#cfcb651f90a1bb38522ce4614efbfbc9fc1ec457"
 dependencies = [
  "ahash",
  "backtrace",
@@ -799,7 +799,7 @@ dependencies = [
 [[package]]
 name = "libafl_derive"
 version = "0.13.0"
-source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#c93121c94a214c06e68eeb138c55a22009934b05"
+source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#cfcb651f90a1bb38522ce4614efbfbc9fc1ec457"
 dependencies = [
  "quote",
  "syn 2.0.68",
@@ -808,7 +808,7 @@ dependencies = [
 [[package]]
 name = "libafl_qemu"
 version = "0.13.0"
-source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#c93121c94a214c06e68eeb138c55a22009934b05"
+source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#cfcb651f90a1bb38522ce4614efbfbc9fc1ec457"
 dependencies = [
  "addr2line 0.23.0",
  "bindgen",
@@ -846,7 +846,7 @@ dependencies = [
 [[package]]
 name = "libafl_qemu_build"
 version = "0.13.0"
-source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#c93121c94a214c06e68eeb138c55a22009934b05"
+source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#cfcb651f90a1bb38522ce4614efbfbc9fc1ec457"
 dependencies = [
  "bindgen",
  "cc",
@@ -862,7 +862,7 @@ dependencies = [
 [[package]]
 name = "libafl_qemu_sys"
 version = "0.13.0"
-source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#c93121c94a214c06e68eeb138c55a22009934b05"
+source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#cfcb651f90a1bb38522ce4614efbfbc9fc1ec457"
 dependencies = [
  "libafl_qemu_build",
  "libc",
@@ -876,7 +876,7 @@ dependencies = [
 [[package]]
 name = "libafl_targets"
 version = "0.13.0"
-source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#c93121c94a214c06e68eeb138c55a22009934b05"
+source = "git+ssh://git@github.com/vringar/LibAFL.git?branch=main#cfcb651f90a1bb38522ce4614efbfbc9fc1ec457"
 dependencies = [
  "bindgen",
  "cc",

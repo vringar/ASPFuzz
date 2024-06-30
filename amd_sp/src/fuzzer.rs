@@ -24,7 +24,7 @@ fn run(qemu_args: Vec<String>) {
     let conf = get_run_conf().unwrap();
 
     // Create directory for this run
-    let run_dir = &get_run_conf().unwrap().run_dir;
+    let run_dir = &conf.run_dir;
     if env::var("AFL_LAUNCHER_CLIENT").is_err() && run_dir.exists() {
         fs::remove_dir_all(run_dir).unwrap();
     }

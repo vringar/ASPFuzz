@@ -83,3 +83,20 @@ script='''
 cargo clean
 rm -rf runs/
 '''
+
+
+# Test/debug the fuzzer
+[tasks.debug]
+linux_alias = "debug_unix"
+mac_alias = "debug_unix"
+windows_alias = "unsupported"
+
+[tasks.debug_unix]
+env = { "RUST_LOG" = "debug" }
+command = "rust-lldb"
+args = [
+    "target/release/aspfuzz",
+    "--",
+    "${@}",
+]
+dependencies = [ "build" ]

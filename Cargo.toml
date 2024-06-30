@@ -10,7 +10,7 @@ libafl = { git = "ssh://git@github.com/vringar/LibAFL.git", branch ="main",defau
     "prelude",
     "fork"
 ] }
-libafl_bolts = {  git = "ssh://git@github.com/vringar/LibAFL.git", branch ="main"}
+libafl_bolts = {  git = "ssh://git@github.com/vringar/LibAFL.git", branch ="main", features = ["errors_backtrace"]}
 libafl_qemu = {  git = "ssh://git@github.com/vringar/LibAFL.git", branch ="main", features = [
     "arm",
     "systemmode",
