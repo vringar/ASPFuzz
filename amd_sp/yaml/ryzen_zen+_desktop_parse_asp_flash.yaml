@@ -67,17 +67,16 @@ harness:
 
 # Tunnels consist of entries with an "entry" and an "exit"
 tunnels:
-  cmps:
-    # on_chip_bl_fletscher32() #1
-    - addr: 0xffff42f0
-      action: CopyRegister
-      target: "R0"
-      source: "R3"
-    # on_chip_bl_fletscher32() #2
-    - addr: 0xffff43ac
-      action: CopyRegister
-      target: "R0"
-      source: "R3"
+  # on_chip_bl_fletscher32() #1
+  - addr: 0xffff42f0
+    action: CopyRegister
+    target: "R0"
+    source: "R3"
+  # on_chip_bl_fletscher32() #2
+  - addr: 0xffff43ac
+    action: CopyRegister
+    target: "R0"
+    source: "R3"
 
 # Define what crashes are
 crashes:

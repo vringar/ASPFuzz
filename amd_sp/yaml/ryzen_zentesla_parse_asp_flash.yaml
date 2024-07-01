@@ -67,22 +67,21 @@ harness:
 
 # Tunnels consist of entries with an "entry" and an "exit"
 tunnels:
-  cmps:
-    # on_chip_bl_fletscher32() #1
-    - addr: 0xffff3bf0
-      action: CopyRegister
-      target: "R0"
-      source: "R3"
-    # on_chip_bl_fletscher32() #2
-    - addr: 0xffff3cbc
-      action: CopyRegister
-      target: "R0"
-      source: "R3"
-    # ARK SHA256 check
-    - addr: 0xffff3e8c
-      action: CopyRegister
-      target: "R0"
-      source: "R1"
+  # on_chip_bl_fletscher32() #1
+  - addr: 0xffff3bf0
+    action: CopyRegister
+    target: "R0"
+    source: "R3"
+  # on_chip_bl_fletscher32() #2
+  - addr: 0xffff3cbc
+    action: CopyRegister
+    target: "R0"
+    source: "R3"
+  # ARK SHA256 check
+  - addr: 0xffff3e8c
+    action: CopyRegister
+    target: "R0"
+    source: "R1"
 
 # Define what crashes are
 crashes:

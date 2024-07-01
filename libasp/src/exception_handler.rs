@@ -37,6 +37,10 @@ impl From<u32> for ExceptionType {
     }
 }
 
+// TODO make this depedent on machine register
+// for exception handler base
+pub const ON_CHIP_ADDR: GuestAddr = 0x100;
+
 pub struct ExceptionHandler {
     exception_vector_base: GuestAddr,
     #[allow(dead_code)]
@@ -53,8 +57,15 @@ pub struct ExceptionHandler {
 
 static mut EXCEPTION_VECTOR_BASE: GuestAddr = 0;
 
+impl Default for ExceptionHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExceptionHandler {
-    pub fn new(exception_vector_base: GuestAddr) -> Self {
+    pub fn new() -> Self {
+        let exception_vector_base = ON_CHIP_ADDR;
         Self {
             exception_vector_base,
             exception_addr_reset: exception_vector_base + 4 * (ExceptionType::RESET as u32),
@@ -68,7 +79,9 @@ impl ExceptionHandler {
             hook_ids: vec![],
         }
     }
-
+    pub fn is_exception_handler_addr(addr: &GuestAddr) -> bool {
+        (ON_CHIP_ADDR..(ON_CHIP_ADDR + 4 * ExceptionType::UNKNOWN as u32)).contains(addr)
+    }
     pub fn start(&mut self, emu: &Qemu) {
         unsafe { EXCEPTION_VECTOR_BASE = self.exception_vector_base };
         //emu.set_hook(self.exception_addr_reset, exception_hook, emu as *const _ as u64, false);
@@ -116,11 +129,10 @@ impl ExceptionHandler {
         ));
     }
 
-    pub fn stop(&self, emu: Qemu) {
+    pub fn stop(&self) {
         for &hook_id in &self.hook_ids {
-            let _ = emu.remove_hook(hook_id, true);
+            hook_id.remove(true);
         }
-        //let _ = emu.remove_hook(self.exception_addr_reset, true);
     }
 }
 

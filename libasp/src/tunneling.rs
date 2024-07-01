@@ -7,7 +7,9 @@ use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer,
 };
-#[derive(Deserialize, Debug)]
+
+use crate::write_flash_mem;
+#[derive(Clone, Deserialize, Debug)]
 #[serde(tag = "action")]
 
 pub enum CmpAction {
@@ -30,17 +32,22 @@ pub enum CmpAction {
         #[serde(deserialize_with = "parse_regs")]
         target: Regs,
     },
+    WriteMemory {
+        addr: GuestAddr,
+        value: Vec<u8>,
+    },
 }
-#[derive(Deserialize, Debug)]
-pub struct CmpConfig {
+#[derive(Clone, Deserialize, Debug)]
+pub struct TunnelActions {
     pub addr: GuestAddr,
     #[serde(flatten)]
     pub value: CmpAction,
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(transparent)]
 pub struct TunnelConfig {
-    pub cmps: Vec<CmpConfig>,
+    pub actions: Vec<TunnelActions>,
 }
 
 impl TunnelConfig {
@@ -49,13 +56,12 @@ impl TunnelConfig {
         QT: QemuHelperTuple<S>,
         S: UsesInput,
     {
-        for CmpConfig {
+        for TunnelActions {
             addr,
             value: action,
-        } in &self.cmps
+        } in self.actions.clone()
         {
-            let addr = *addr;
-            match *action {
+            match action {
                 CmpAction::SetConstant { target, value } => hooks.instruction(
                     addr,
                     Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _pc| {
@@ -100,6 +106,22 @@ impl TunnelConfig {
                     Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _pc| {
                         let value: u32 = hks.qemu().read_reg(target).unwrap();
                         log::debug!("Tunnel - Log [{:#x}, {:?}, {:#x}]", addr, target, value);
+                    })),
+                    false,
+                ),
+                CmpAction::WriteMemory {
+                    addr: memory_addr,
+                    value,
+                } => hooks.instruction(
+                    addr,
+                    Hook::Closure(Box::new(move |_hks: &mut QemuHooks<QT, S>, _state, _pc| {
+                        log::debug!(
+                            "Tunnel - WriteMem [{:#x}, {:#x}, {:#?}]",
+                            addr,
+                            memory_addr,
+                            value
+                        );
+                        unsafe { write_flash_mem(memory_addr, &value) }
                     })),
                     false,
                 ),

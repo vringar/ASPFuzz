@@ -3,16 +3,7 @@ use std::process;
 use libafl::prelude::*;
 use libafl_bolts::{os::unix_signals::Signal, prelude::*};
 use libafl_qemu::{GuestAddr, Qemu, QemuExitError, QemuExitReason, QemuShutdownCause, Regs};
-use libasp::{get_run_conf, ExceptionType, FixedConfig, Reset, ResetState};
-
-use crate::client::ON_CHIP_ADDR;
-
-extern "C" {
-    fn aspfuzz_write_smn_flash(addr: GuestAddr, len: i32, buf: *mut u8);
-}
-pub unsafe fn write_flash_mem(addr: GuestAddr, buf: &[u8]) {
-    aspfuzz_write_smn_flash(addr, buf.len() as i32, buf.as_ptr() as *mut u8);
-}
+use libasp::{get_run_conf, write_flash_mem, ExceptionHandler, FixedConfig, Reset, ResetState};
 
 pub fn create_harness(
     mut rs: ResetState,
@@ -65,7 +56,7 @@ pub fn create_harness(
         }
 
         // Start the emulation
-        let mut pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
+        let mut pc: u32 = cpu.read_reg(Regs::Pc).unwrap();
         log::debug!("Start at {:#x}", pc);
         unsafe {
             match emu.run() {
@@ -92,9 +83,7 @@ pub fn create_harness(
         // Look for crashes if no sink was hit
         if !conf.harness.sinks.iter().any(|&v| v == pc as GuestAddr) {
             // Don't trigger on exceptions
-            if !(ON_CHIP_ADDR..(ON_CHIP_ADDR + 4 * ExceptionType::UNKNOWN as u32))
-                .contains(&(pc as u32))
-            {
+            if !ExceptionHandler::is_exception_handler_addr(&pc) {
                 counter_snapshot = 0;
                 is_crash_snapshot = true;
 

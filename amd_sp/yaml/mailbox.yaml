@@ -25,8 +25,9 @@ input:
     - addr: 0x20
       size: 0x10
   fixed:
-    # - addr: 0x0108ae
-    #   val: 0x1
+    - addr: 0x0108ae
+      val: 0x1
+
 
 # Harness
 harness:
@@ -44,37 +45,36 @@ harness:
 # Tunnels describe any fixup that has to happen during execution
 # at a certain address
 tunnels:
-  cmps:
-    # Skip to x86_workloop in cold boot
-    - addr: 0x2938
-      action: Jump
-      source: 0x2b0e
-      target: 0x2b8a
-    # fix function in x86_workloop
-    - addr: 0x9236
-      action: SetConstant
-      target: R0
-      value: 0x0
-    # overwrite of 0x100ac
-    - addr: 0x06988
-      action: SetConstant
-      target: R0
-      value: 0x1
-    # SKIP ABL
-    - addr: 0x2938 # When the overwriting happens
-      action: Jump
-      source: 0x2a1c # what gets overwritten
-      target: 0x2a2e # where to jump to
-    # Causing problems
-    - addr: 0x2b14
-      action: SetConstant
-      target: R0
-      value: 0x0
-    # Don't go into recovery loop
-    - addr: 0x9260
-      action: SetConstant
-      target: R0
-      value: 0x0
+  # Skip to x86_workloop in cold boot
+  - addr: 0x2938
+    action: Jump
+    source: 0x2b0e
+    target: 0x2b8a
+  # fix function in x86_workloop
+  - addr: 0x9236
+    action: SetConstant
+    target: R0
+    value: 0x0
+  # overwrite of 0x100ac
+  - addr: 0x06988
+    action: SetConstant
+    target: R0
+    value: 0x1
+  # SKIP ABL
+  - addr: 0x2938 # When the overwriting happens
+    action: Jump
+    source: 0x2a1c # what gets overwritten
+    target: 0x2a2e # where to jump to
+  # Causing problems
+  - addr: 0x2b14
+    action: SetConstant
+    target: R0
+    value: 0x0
+  # Don't go into recovery loop
+  - addr: 0x9260
+    action: SetConstant
+    target: R0
+    value: 0x0
 
 
 crashes:

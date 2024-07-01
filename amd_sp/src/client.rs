@@ -27,10 +27,6 @@ use std::{
 
 use crate::harness;
 
-// TODO make this depedent on machine register
-// for exception handler base
-pub const ON_CHIP_ADDR: GuestAddr = 0x100;
-
 type MyState =
     StdState<BytesInput, InMemoryCorpus<BytesInput>, RomuDuoJrRand, CachedOnDiskCorpus<BytesInput>>;
 
@@ -127,7 +123,7 @@ where
     }
     // Configure ResetState and ExceptionHandler helpers
     let mut rs = ResetState::new(conf.flash.size);
-    let mut eh = ExceptionHandler::new(ON_CHIP_ADDR);
+    let mut eh = ExceptionHandler::new();
 
     // Go to FUZZ_START
     let addr = conf.harness.start;
