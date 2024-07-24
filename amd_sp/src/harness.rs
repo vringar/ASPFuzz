@@ -3,7 +3,14 @@ use std::process;
 use libafl::prelude::*;
 use libafl_bolts::{os::unix_signals::Signal, prelude::*};
 use libafl_qemu::{GuestAddr, Qemu, QemuExitError, QemuExitReason, QemuShutdownCause, Regs};
-use libasp::{get_run_conf, write_flash_mem, ExceptionHandler, FixedConfig, Reset, ResetState};
+use libasp::{get_run_conf, ExceptionHandler, FixedConfig, Reset, ResetState};
+
+extern "C" {
+    fn aspfuzz_write_smn_flash(addr: GuestAddr, len: i32, buf: *mut u8);
+}
+pub unsafe fn write_flash_mem(addr: GuestAddr, buf: &[u8]) {
+    aspfuzz_write_smn_flash(addr, buf.len() as i32, buf.as_ptr() as *mut u8);
+}
 
 pub fn create_harness(
     mut rs: ResetState,

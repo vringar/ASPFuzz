@@ -25,8 +25,7 @@ input:
     - addr: 0x20
       size: 0x10
   fixed:
-    - addr: 0x0108ae
-      val: 0x1
+    # Setting up fixed addr doesn't work when using off-chip
 
 
 # Harness
@@ -56,7 +55,7 @@ tunnels:
     target: R0
     value: 0x0
   # overwrite of 0x100ac
-  - addr: 0x06988
+  - addr: 0x6988
     action: SetConstant
     target: R0
     value: 0x1
@@ -64,17 +63,37 @@ tunnels:
   - addr: 0x2938 # When the overwriting happens
     action: Jump
     source: 0x2a1c # what gets overwritten
-    target: 0x2a2e # where to jump to
+    target: 0x2a2a # where to jump to
   # Causing problems
   - addr: 0x2b14
     action: SetConstant
     target: R0
     value: 0x0
-  # Don't go into recovery loop
   - addr: 0x9260
     action: SetConstant
     target: R0
     value: 0x0
+  # Set Bootmode to 6
+  # - addr: 0x927c
+  #   action: SetConstant
+  #   target: R5
+  #   value: 0x6
+  # Message has been sent
+  - addr:   0x9408
+    action: WriteMemory
+    target: 0x108ae
+    value: [0x1]
+
+  ### Jump To SecOS stuff
+  # Log error code of load_app_id_from_flash
+  - addr: 0xd26e
+    action: LogRegister
+    target: R0
+  # Debug error state
+  - addr: 0xa9a4
+    action: LogRegister
+    target: LR
+
 
 
 crashes:

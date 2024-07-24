@@ -8,7 +8,6 @@ use serde::{
     Deserialize, Deserializer,
 };
 
-use crate::write_flash_mem;
 #[derive(Clone, Deserialize, Debug)]
 #[serde(tag = "action")]
 
@@ -33,7 +32,7 @@ pub enum CmpAction {
         target: Regs,
     },
     WriteMemory {
-        addr: GuestAddr,
+        target: GuestAddr,
         value: Vec<u8>,
     },
 }
@@ -110,18 +109,18 @@ impl TunnelConfig {
                     false,
                 ),
                 CmpAction::WriteMemory {
-                    addr: memory_addr,
+                    target: memory_addr,
                     value,
                 } => hooks.instruction(
                     addr,
-                    Hook::Closure(Box::new(move |_hks: &mut QemuHooks<QT, S>, _state, _pc| {
+                    Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _pc| {
                         log::debug!(
-                            "Tunnel - WriteMem [{:#x}, {:#x}, {:#?}]",
+                            "Tunnel - WriteMem [{:#x}, {:#x}, {:?}]",
                             addr,
                             memory_addr,
                             value
                         );
-                        unsafe { write_flash_mem(memory_addr, &value) }
+                        unsafe { hks.qemu().write_mem(memory_addr, &value) };
                     })),
                     false,
                 ),

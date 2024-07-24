@@ -24,7 +24,3 @@ pub use tunneling::*;
 // Parsing the YAML config
 pub mod yaml_conf;
 pub use yaml_conf::*;
-
-// Raw Calls into C++
-pub mod asp;
-pub use asp::*;
