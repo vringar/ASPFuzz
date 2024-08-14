@@ -39,6 +39,8 @@
         ];
         pkgs = import nixpkgs {inherit overlays system;};
         llvm = pkgs.llvmPackages_18;
+        python = pkgs.python312;
+        python_pkgs = pkgs.python312Packages;
         # Things needed to build the software
         nativeBuildInputs = with pkgs; [
           rustToolchain
@@ -54,8 +56,9 @@
 
           meson
           ninja
-          python312Packages.libfdt
-          python312
+          python_pkgs.libfdt
+          python_pkgs.black
+          python
         ];
 
         # Runtime dependencies

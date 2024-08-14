@@ -4,9 +4,19 @@ import os
 from pathlib import Path
 import argparse
 
-parser = argparse.ArgumentParser(description='Analysing solution metadata files')
-parser.add_argument("run_dir", type=str, help="Path to the specific fuzzer run (not the general runs/ dir)")
-parser.add_argument('-p', '--uninteresting_pc', nargs='+', default=[], help="Don't output solutions with these pc's")
+parser = argparse.ArgumentParser(description="Analysing solution metadata files")
+parser.add_argument(
+    "run_dir",
+    type=str,
+    help="Path to the specific fuzzer run (not the general runs/ dir)",
+)
+parser.add_argument(
+    "-p",
+    "--uninteresting_pc",
+    nargs="+",
+    default=[],
+    help="Don't output solutions with these pc's",
+)
 args = parser.parse_args()
 
 run_dir_path = Path(args.run_dir)
@@ -28,8 +38,8 @@ for metadata_file in glob.glob(os.path.join(solutions_path, ".*.metadata")):
     hash_re_result = re.search(hash_re, metadata_file)
     if hash_re_result:
         hash_val = hash_re_result[1]
-        with open(metadata_file, 'r') as f:
-            lines = [line.rstrip().replace('"', '').strip() for line in f]
+        with open(metadata_file, "r") as f:
+            lines = [line.rstrip().replace('"', "").strip() for line in f]
         for line in lines:
             pc_out = re.match(pc_re, line)
             lr_out = re.match(lr_re, line)

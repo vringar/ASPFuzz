@@ -50,3 +50,4 @@ git diff-index --check --cached $against --
 cargo fmt --check
 cargo clippy --release
 nix fmt
+black .
