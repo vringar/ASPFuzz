@@ -54,8 +54,8 @@
 
           meson
           ninja
-          python311Packages.libfdt
-          python311
+          python312Packages.libfdt
+          python312
         ];
 
         # Runtime dependencies
