@@ -38,17 +38,18 @@
           )
         ];
         pkgs = import nixpkgs {inherit overlays system;};
+        llvm = pkgs.llvmPackages_18;
         # Things needed to build the software
         nativeBuildInputs = with pkgs; [
           rustToolchain
           cargo-make
           gcc-arm-embedded
           git
-          llvmPackages_18.clang
+          llvm.clang
           pkg-config
           rust-bindgen-unwrapped
-          llvmPackages_18.libllvm
-          llvmPackages_18.libclang
+          llvm.libllvm
+          llvm.libclang
           libgit2
 
           meson
@@ -64,7 +65,7 @@
           z3
           glib
           libgcrypt
-          llvmPackages_18.libcxx
+          llvm.libcxx
           pixman
           xorg.libX11
         ];
@@ -84,9 +85,9 @@
                 openssl
               ])
               ++ pkgs.lib.optionals pkgs.stdenv.isDarwin (with pkgs; [libiconv]);
-            LIBCLANG_PATH = "${pkgs.llvmPackages_18.libclang.lib}/lib";
-            CC = "${pkgs.llvmPackages_18.clang.out}/clang";
-            CXX = "${pkgs.llvmPackages_18.clang.out}/clang++";
+            LIBCLANG_PATH = "${llvm.libclang.lib}/lib";
+            CC = "${llvm.clang.out}/clang";
+            CXX = "${llvm.clang.out}/clang++";
           };
         }
     );
