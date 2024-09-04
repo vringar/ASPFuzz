@@ -18,7 +18,10 @@ def colored(text: str, color_code: str) -> str:
     return f"\033[{color_code}m{text}\033[0m"
 
 
-def pretty_print_bin(bits: str, offset=0,) -> str:
+def pretty_print_bin(
+    bits: str,
+    offset=0,
+) -> str:
     colors = [
         COLOR_MAPPING["Red"],
         COLOR_MAPPING["Cyan"],
@@ -68,7 +71,7 @@ def show_shifting_bits(number: int, left_shift: int, right_shift: int):
         f"After right shift by {right_shift}: {pretty_print_bin(right_shifted_bin, offset=-shifted_bit_start)}"
     )
     print(f"Final result (dec): {right_shifted}")
-    print(f"Selected bits: {shifted_bit_start}:{shifted_bit_end}")
+    print(f"Selected bits: {hex(shifted_bit_start)}:{hex(shifted_bit_end)}")
     print(f"Result length: {result_length}")
     return [right_shifted, f"{shifted_bit_start}:{shifted_bit_end}"]
 
