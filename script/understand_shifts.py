@@ -18,10 +18,7 @@ def colored(text: str, color_code: str) -> str:
     return f"\033[{color_code}m{text}\033[0m"
 
 
-def pretty_print_bin(
-    bits: str,
-    offset=0,
-) -> str:
+def pretty_print_bin(bits: str, offset=0, valid_len=32) -> str:
     colors = [
         COLOR_MAPPING["Red"],
         COLOR_MAPPING["Cyan"],
@@ -34,7 +31,7 @@ def pretty_print_bin(
     color_index = len(bits) - offset
     for char in bits:
         color_index -= 1
-        if color_index >= 0:
+        if color_index >= 0 and color_index < valid_len:
             color = colors[(color_index // 4) % len(colors)]
             output += colored(char, color)
         else:
@@ -56,19 +53,29 @@ def show_shifting_bits(number: int, left_shift: int, right_shift: int):
     right_shifted = (left_shifted >> right_shift) & 0xFFFFFFFF
     # Calculate the length of the resulting binary string
     result_length = 32 - left_shift - (right_shift - left_shift)
-    right_shifted_bin = bin(right_shifted)[2:].zfill(result_length)
+    right_shifted_bin = bin(right_shifted)[2:].zfill(32)
 
     # Calculate the range of selected bits
     shifted_bit_start = right_shift - left_shift
     shifted_bit_end = 32 - left_shift
 
+    og = "Original number (bin):"
+    left = f"After left shift by {left_shift}:"
+    right = f"After right shift by {right_shift}:"
+    max_len = max(len(og), len(left), len(right))
+    og = og.ljust(max_len)
+    left = left.ljust(max_len)
+    right = right.ljust(max_len)
     # Print the results
-    print(f"Original number (bin):   {pretty_print_bin(original_bin)}")
+    print(og, pretty_print_bin(original_bin))
+    print(left, pretty_print_bin(left_shifted_bin, offset=left_shift))
     print(
-        f"After left shift by {left_shift}: {pretty_print_bin(left_shifted_bin, offset=left_shift)}"
-    )
-    print(
-        f"After right shift by {right_shift}: {pretty_print_bin(right_shifted_bin, offset=-shifted_bit_start)}"
+        right,
+        pretty_print_bin(
+            right_shifted_bin,
+            offset=-shifted_bit_start,
+            valid_len=result_length + shifted_bit_start,
+        ),
     )
     print(f"Final result (dec): {right_shifted}")
     print(f"Selected bits: {hex(shifted_bit_start)}:{hex(shifted_bit_end)}")
