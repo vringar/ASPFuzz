@@ -2,71 +2,33 @@ use std::process;
 
 use libafl::prelude::*;
 use libafl_bolts::{os::unix_signals::Signal, prelude::*};
-use libafl_qemu::{GuestAddr, Qemu, QemuExitError, QemuExitReason, QemuShutdownCause, Regs};
-use libasp::{get_run_conf, ExceptionHandler, FixedConfig, Reset, ResetState};
+use libafl_qemu::{
+    command::CommandManager, Emulator, QemuExitError, QemuExitReason, QemuShutdownCause, Regs,
+};
+use libasp::config::get_run_conf;
 
-extern "C" {
-    fn aspfuzz_write_smn_flash(addr: GuestAddr, len: i32, buf: *mut u8);
-}
-pub unsafe fn write_flash_mem(addr: GuestAddr, buf: &[u8]) {
-    aspfuzz_write_smn_flash(addr, buf.len() as i32, buf.as_ptr() as *mut u8);
-}
+pub type MyState =
+    StdState<BytesInput, InMemoryCorpus<BytesInput>, RomuDuoJrRand, OnDiskCorpus<BytesInput>>;
 
-pub fn create_harness(
-    mut rs: ResetState,
-    emu: Qemu,
-) -> impl FnMut(&BytesInput) -> ExitKind + Clone {
-    // These variables are captured in the closure and persist across reruns
-    let mut is_crash_snapshot = false;
-    let mut counter_snapshot = 0;
-    move |input| {
+pub fn _create_harness<CM, ED, ET, SM>(
+) -> impl FnMut(Emulator<CM, ED, ET, MyState, SM>, MyState, &BytesInput) -> ExitKind + Clone
+where
+    CM: CommandManager<ED, ET, MyState, SM>,
+{
+    move |emulator: Emulator<CM, ED, ET, MyState, SM>, _state, input| {
         let conf = &get_run_conf().unwrap().yaml_config;
         log::debug!("### Start harness");
-
-        // Reset emulator state
-        if is_crash_snapshot {
-            is_crash_snapshot = false;
-            rs.load(&emu, &conf.snapshot.on_crash);
-        } else if counter_snapshot >= conf.snapshot.period {
-            counter_snapshot = 0;
-            rs.load(&emu, &conf.snapshot.periodically);
-        } else {
-            rs.load(&emu, &conf.snapshot.default);
-        }
-
+        // TODO: emulator.restore_fast_snapshot(snapshot)
         #[cfg(feature = "debug")]
         print_input(input.bytes());
-
-        // Input to memory
-        let target = input.target_bytes();
-        let mut target_buf = target.as_slice();
-        if target_buf.len() > conf.input.total_size() {
-            target_buf = &target_buf[..conf.input.total_size()];
-        }
-        let mut buffer = vec![0; conf.input.total_size()];
-        buffer[..target_buf.len()].copy_from_slice(target_buf);
-        let mut buffer = buffer.as_slice();
-        let cpu = emu.current_cpu().unwrap(); // ctx switch safe
-        for mem in conf.input.mem.iter() {
-            unsafe {
-                write_flash_mem(mem.addr, &buffer[..mem.size]);
-            }
-            buffer = &buffer[mem.size..];
-        }
-
-        // Fixed values to memory
-        for &FixedConfig { addr, val: value } in conf.input.fixed.iter() {
-            let buffer = value.to_ne_bytes();
-            unsafe {
-                write_flash_mem(addr, &buffer);
-            }
-        }
+        let cpu = emulator.qemu().current_cpu().unwrap(); // ctx switch safe
+        conf.input.apply_input(input);
 
         // Start the emulation
         let mut pc: u32 = cpu.read_reg(Regs::Pc).unwrap();
         log::debug!("Start at {:#x}", pc);
         unsafe {
-            match emu.run() {
+            match emulator.qemu().run() {
                 Ok(QemuExitReason::Breakpoint(_)) => {}
                 Ok(QemuExitReason::End(QemuShutdownCause::HostSignal(Signal::SigInterrupt))) => {
                     process::exit(CTRL_C_EXIT)
@@ -86,19 +48,6 @@ pub fn create_harness(
         pc = cpu.read_reg(Regs::Pc).unwrap();
         let r0: u64 = cpu.read_reg(Regs::R0).unwrap();
         log::debug!("End at {:#x} with R0={:#x}", pc, r0);
-        counter_snapshot += 1;
-        // Look for crashes if no sink was hit
-        if !conf.harness.sinks.iter().any(|&v| v == pc as GuestAddr) {
-            // Don't trigger on exceptions
-            if !ExceptionHandler::is_exception_handler_addr(&pc) {
-                counter_snapshot = 0;
-                is_crash_snapshot = true;
-
-                log::info!("Found crash at {:#x}", pc);
-                return ExitKind::Crash;
-            }
-        }
-        log::debug!("End harness");
         ExitKind::Ok
     }
 }

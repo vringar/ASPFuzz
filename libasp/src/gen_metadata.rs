@@ -63,33 +63,26 @@ impl CustomMetadata {
 pub struct CustomMetadataFeedback {
     emulator: Qemu,
 }
-
-impl<S> Feedback<S> for CustomMetadataFeedback
-where
-    S: UsesInput + State,
-{
-    fn is_interesting<EM, OT>(
+impl<S> StateInitializer<S> for CustomMetadataFeedback {}
+impl<EM, I, OT, S> Feedback<EM, I, OT, S> for CustomMetadataFeedback {
+    fn is_interesting(
         &mut self,
         _state: &mut S,
         _manager: &mut EM,
-        _input: &S::Input,
+        _input: &I,
         _observers: &OT,
         _exit_kind: &ExitKind,
-    ) -> Result<bool, Error>
-    where
-        EM: EventFirer,
-        OT: ObserversTuple<S>,
-    {
+    ) -> Result<bool, Error> {
         log::info!("CustomMetadataFeedback=True");
         Ok(true)
     }
 
-    fn append_metadata<EM, OT>(
+    fn append_metadata(
         &mut self,
         _state: &mut S,
         _em: &mut EM,
         _ot: &OT,
-        testcase: &mut Testcase<S::Input>,
+        testcase: &mut Testcase<I>,
     ) -> Result<(), Error> {
         // Read regs
         let mut regs = Vec::new();

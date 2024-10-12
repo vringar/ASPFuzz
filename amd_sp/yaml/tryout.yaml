@@ -14,9 +14,7 @@ flash:
 debug: false
 input:
   flash:
-    base:
-      # No initial content
-
+    # No initial content
   mem:
     # Mailbox and Pointer
     - addr: 0x03010570
@@ -28,7 +26,9 @@ input:
 # Harness
 harness:
   # cold_boot call to x86_workloop #
-  start: 0x116c
+  # start: 0x116c
+  # Start from on-chip-bl and see how far we get
+  start: 0xffff0000
   sinks:
     # sts_report_to_x86_hang_on_error in loop
     - 0x7274

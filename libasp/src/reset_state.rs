@@ -26,7 +26,7 @@ pub struct ResetState {
     syx_snapshot: Option<*mut SyxSnapshot>,
 }
 
-#[derive(Default, Deserialize)]
+#[derive(Clone, Default, Deserialize)]
 pub enum ResetLevel {
     /*
      *  Loading snapshot:

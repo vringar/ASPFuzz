@@ -1,4 +1,4 @@
-mod client;
+//mod client;
 #[cfg(all(target_os = "linux", not(feature = "performance")))]
 mod fuzzer;
 mod harness;
@@ -6,10 +6,12 @@ mod harness;
 mod performance;
 mod setup;
 
+use libafl::Error;
+
 #[cfg(target_os = "linux")]
-pub fn main() {
+pub fn main() -> Result<(), Error> {
     #[cfg(not(feature = "performance"))]
-    fuzzer::fuzz();
+    return fuzzer::fuzz();
     #[cfg(feature = "performance")]
     performance::fuzz();
 }

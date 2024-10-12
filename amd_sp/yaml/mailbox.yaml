@@ -16,7 +16,7 @@ flash:
   base: "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
 
 input:
-  initial:
+  flash:
     # No initial content
   mem:
     # # Mailbox and Pointer
@@ -88,9 +88,9 @@ crashes:
   mmap:
     no_exec:
     # TODO: figure out relevant regions
-    flash_read_fn: 0x0
-    no_write_flash_fn:
-    no_write_hooks:
+    ccp_memcopy_addr: 0x0
+    forbidden_memcopies:
+    forbidden_writes:
 
 # Snapshotting behaviour:
 # - Use enum for "default", "on_crash", "periodically":

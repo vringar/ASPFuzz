@@ -2,7 +2,7 @@
 name = "aspfuzz"
 version = "0.8.0"
 authors = ["Patrick Gersch"]
-edition = "2018"
+edition = "2021"
 
 [features]
 default = ["std"]
@@ -20,9 +20,9 @@ libafl_bolts = { workspace = true}
 libasp = { path = "../libasp" }
 
 serde = { version = "1.0", default-features = false, features = ["alloc"] } # serialization lib
-log = "0.4"
-env_logger = "0.11.3"
-nix = {version ="0.28", features = ["fs"]}
-chrono = "0.4"
+log = "0.4.22"
+env_logger = "0.11.5"
+nix = {version ="0.29", features = ["fs"]}
+chrono = "0.4.38"
 rangemap = "1.5.0"
-clap = { version = "4.0", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }

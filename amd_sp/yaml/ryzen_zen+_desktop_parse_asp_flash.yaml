@@ -20,40 +20,41 @@ flash:
 # Input data and area
 input:
   # Initial inputs for the fuzzer
-  initial:
-    - "bins/PRIME-X370-PRO-ASUS-3803.ROM"
-  # Input bytes in-order to flash memory
-  mem:
-    # FET
-    - addr: 0x00020000
-      size: 0x40
-    # Combo Dir
-    - addr: 0x000c0000
-      size: 0x300
-    # Dir
-    - addr: 0x000d1000
-      size: 0x300
-    # Entry header
-    - addr: 0x00361400
-      size: 0x100
-  # Set fixed values at certain addresses
-  fixed:
-    # Combo Dir addr
-    - addr: 0x00020014
-      val: 0xff0c0000
-    # Dir addr
-    - addr: 0x000c0028
-      val: 0xff0d1000
-    # Public key addr
-    - addr: 0x000c0018
-      val: 0xff0d1400
-    - addr: 0x000d1018
-      val: 0xff0d1400
-    # Entry header addr
-    - addr: 0x000c0038
-      val: 0xff361400
-    - addr: 0x000d1028
-      val: 0xff361400
+  flash:
+    base:
+      - "bins/PRIME-X370-PRO-ASUS-3803.ROM"
+    # Input bytes in-order to flash memory
+    input:
+      # FET
+      - addr: 0x00020000
+        size: 0x40
+      # Combo Dir
+      - addr: 0x000c0000
+        size: 0x300
+      # Dir
+      - addr: 0x000d1000
+        size: 0x300
+      # Entry header
+      - addr: 0x00361400
+        size: 0x100
+    # Set fixed values at certain addresses
+    fixed:
+      # Combo Dir addr
+      - addr: 0x00020014
+        val: 0xff0c0000
+      # Dir addr
+      - addr: 0x000c0028
+        val: 0xff0d1000
+      # Public key addr
+      - addr: 0x000c0018
+        val: 0xff0d1400
+      - addr: 0x000d1018
+        val: 0xff0d1400
+      # Entry header addr
+      - addr: 0x000c0038
+        val: 0xff361400
+      - addr: 0x000d1028
+        val: 0xff361400
 
 # Harness
 harness:
@@ -87,24 +88,24 @@ crashes:
     no_exec:
       - begin: 0x0
         end: 0xffff0000
-    # Flash read function for no_write_flash_fn
-    flash_read_fn: 0xffff74dc
+    # Flash read function for forbidden_memcopies
+    ccp_memcopy_addr: 0xffff74dc
     # Only hooks the on_chip_bl_flash_read()
     # don't hook call at no_hook
     # (recommended)
-    no_write_flash_fn:
+    forbidden_memcopies:
       # SRAM region (BootROMServicePage) which can be used as a hash for the public key
       - begin: 0x3f8a0
         end: 0x3f8c0
       # SRAM region (BootROMServicePage) storing the public key
       - begin: 0x3f410
         end: 0x3f650
-        holes: # This name is really bad but I wanted to reuse a struct
+        no_hook:
           - 0xffff440c
     # Write hooks on every ldr operation
     # except on addresses listed in "no_ldr"
     # (NOT recommended, very slow)
-    no_write_hooks:
+    forbidden_writes:
       # - begin:  null
       #   end:    null
       #   no_ldr: null

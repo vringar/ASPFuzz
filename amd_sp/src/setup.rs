@@ -1,7 +1,7 @@
 use chrono::Local;
 use clap::{command, Parser};
 
-use libasp::{borrow_global_conf, init_global_conf};
+use libasp::config::{borrow_global_conf, init_global_conf};
 
 use std::{env, path::PathBuf, process::exit};
 
@@ -47,8 +47,6 @@ pub fn parse_args() -> Vec<String> {
     init_global_conf(&cli_args.yaml_path, num_cores, run_dir);
     let conf = borrow_global_conf().unwrap();
 
-    // For multicore fuzzing a core number must be provided
-
     //Check if pathes exist
     if !conf.qemu.on_chip_bl_path.exists() {
         println!(
@@ -67,16 +65,13 @@ pub fn parse_args() -> Vec<String> {
 
     // Create arguments to start QEMU with
     let mut qemu_args: Vec<String> = vec![env::args().next().unwrap()];
-    #[cfg(not(feature = "debug"))]
-    qemu_args.append(&mut vec![
-        "-trace".to_string(),
-        "file=/dev/null".to_string(),
-    ]);
-    #[cfg(feature = "debug")]
-    qemu_args.append(&mut vec![
-        "-d".to_string(),
-        "trace:ccp_*,trace:psp_*".to_string(),
-    ]);
+    println!("QEMU arguments: {:?}", qemu_args);
+    if conf.debug {
+        qemu_args.append(&mut vec![
+            "-d".to_string(),
+            "trace:ccp_*,trace:psp_*".to_string(),
+        ]);
+    }
     qemu_args.extend(vec![
         "--machine".to_string(),
         conf.qemu.zen.get_qemu_machine_name().to_string(),
@@ -99,6 +94,8 @@ pub fn parse_args() -> Vec<String> {
             env::var("PROJECT_DIR").unwrap(),
             &conf.flash.base.display()
         ],
+        "-monitor".to_string(),
+        "none".to_string(),
     ]);
 
     qemu_args

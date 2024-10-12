@@ -29,18 +29,16 @@ ASPLibAFL -.-> ASPFuzz;
 
 ## Requirements
 
+Install [`nix`](https://lix.systems/install/)  and use the `flake.nix` with `nix develop` to get a fully reproducible environemnt
+that you can easily share across machines.
+Alternatively you can install the following dependencies manually:
+
 - [Qemu requirements](https://wiki.qemu.org/Hosts/Linux) (Ubuntu: `sudo apt-get install git libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev ninja-build`)
 - arm-none-eabi-gcc (Ubuntu `sudo apt install gcc-arm-none-eabi`)
 - nettle (Ubuntu: `sudo apt install nettle-dev`)
 - [rust](https://www.rust-lang.org/tools/install)
 - [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html)
 - [cargo-make](https://github.com/sagiegurari/cargo-make)
-
-## Install
-
-```bash
-git submodule update --init
-```
 
 ## Run
 

@@ -6,12 +6,12 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-libafl = { git = "ssh://git@github.com/vringar/LibAFL.git", branch ="main",default-features = false, features = [
+libafl = { git = "ssh://git@git.tu-berlin.de/pspreverse/libafl.git", branch ="main",default-features = false, features = [
     "prelude",
     "fork"
 ] }
-libafl_bolts = {  git = "ssh://git@github.com/vringar/LibAFL.git", branch ="main", features = ["errors_backtrace"]}
-libafl_qemu = {  git = "ssh://git@github.com/vringar/LibAFL.git", branch ="main", features = [
+libafl_bolts = {  git = "ssh://git@git.tu-berlin.de/pspreverse/libafl.git", branch ="main", features = ["errors_backtrace"]}
+libafl_qemu = {  git = "ssh://git@git.tu-berlin.de/pspreverse/libafl.git", branch ="main", features = [
     "arm",
     "systemmode",
 ], default-features = false }

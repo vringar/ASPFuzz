@@ -32,13 +32,13 @@
             self: super: {
               rustToolchain = super.rust-bin.selectLatestNightlyWith (toolchain:
                 toolchain.default.override {
-                  extensions = ["rust-src" "llvm-tools-preview"];
+                  extensions = ["rust-src" "llvm-tools-preview" "rust-analyzer"];
                 });
             }
           )
         ];
         pkgs = import nixpkgs {inherit overlays system;};
-        llvm = pkgs.llvmPackages_18;
+        llvm = pkgs.llvmPackages_19;
         python = pkgs.python312;
         python_pkgs = pkgs.python312Packages;
         # Things needed to build the software
@@ -84,8 +84,11 @@
               (with pkgs; [
                 # DevTools
                 zsh
+                qemu-utils # For the qemu_systemmode example in LibAFL
                 # getting Rustanalyzer to work
                 openssl
+                libz
+                cargo-watch
               ])
               ++ pkgs.lib.optionals pkgs.stdenv.isDarwin (with pkgs; [libiconv]);
             LIBCLANG_PATH = "${llvm.libclang.lib}/lib";

@@ -1,5 +1,15 @@
+pub mod tunnel;
+use libafl::inputs::UsesInput;
+use libafl_bolts::tuples::{tuple_list, tuple_list_type};
+use tunnel::TunnelConfig;
+
+pub mod input;
+use input::InputConfig;
+
+pub mod crash;
 use crate::reset_state::ResetLevel;
-use crate::TunnelConfig;
+use crate::LibAspModule;
+use crash::{CrashConfig, CrashModule};
 /// Parsing the YAML config file
 use libafl_qemu::*;
 use serde::Deserialize;
@@ -19,7 +29,7 @@ pub struct RunConfig {
     pub config_path: PathBuf,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub enum ZenVersion {
     Zen1,
     #[serde(alias = "Zen+")]
@@ -43,55 +53,24 @@ impl ZenVersion {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct QemuConf {
     pub zen: ZenVersion,
     pub on_chip_bl_path: PathBuf,
 }
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct FlashConfig {
-    pub start_smn: GuestAddr,
     pub size: GuestUsize,
-    pub start_cpu: GuestAddr,
     pub base: PathBuf,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct MemConfig {
-    pub addr: GuestAddr,
-    pub size: usize,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct FixedConfig {
-    pub addr: GuestAddr,
-    pub val: GuestUsize,
-}
-#[derive(Deserialize, Debug)]
-pub struct InputConfig {
-    pub initial: Vec<PathBuf>,
-    pub mem: Vec<MemConfig>,
-    pub fixed: Vec<FixedConfig>,
-}
-
-impl InputConfig {
-    pub fn total_size(&self) -> usize {
-        self.mem.iter().fold(0, |counter, e| counter + e.size)
-    }
-}
-
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct HarnessConfig {
     pub start: GuestAddr,
     pub sinks: Vec<GuestAddr>,
 }
-#[derive(Deserialize, Debug)]
-pub struct NoExecConfig {
-    pub begin: GuestAddr,
-    pub end: GuestAddr,
-}
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct RegionWithHoles {
     pub begin: GuestAddr,
     pub end: GuestAddr,
@@ -99,21 +78,7 @@ pub struct RegionWithHoles {
     pub holes: Vec<GuestAddr>,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct CrashConfig {
-    pub breakpoints: Vec<GuestAddr>,
-    pub mmap: MmapConfig,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct MmapConfig {
-    pub no_exec: Vec<NoExecConfig>,
-    pub flash_read_fn: GuestAddr,
-    pub no_write_flash_fn: Vec<RegionWithHoles>,
-    pub no_write_hooks: Vec<RegionWithHoles>,
-}
-
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct SnapshotConfig {
     pub default: ResetLevel,
     pub on_crash: ResetLevel,
@@ -121,8 +86,10 @@ pub struct SnapshotConfig {
     pub period: usize,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 pub struct YAMLConfig {
+    #[serde(default)]
+    pub debug: bool,
     pub qemu: QemuConf,
     pub flash: FlashConfig,
     pub input: InputConfig,
@@ -159,6 +126,15 @@ impl YAMLConfig {
             .expect("Unable to open yaml config file");
 
         serde_yaml::from_reader(file).unwrap()
+    }
+    pub fn get_emulator_modules<S>(&self) -> tuple_list_type!(LibAspModule, CrashModule)
+    where
+        S: UsesInput + Unpin,
+    {
+        tuple_list!(
+            LibAspModule::new(self.clone()),
+            CrashModule::new(self.crashes.clone())
+        )
     }
 }
 

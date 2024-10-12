@@ -38,22 +38,22 @@ pub enum CmpAction {
 }
 #[derive(Clone, Deserialize, Debug)]
 pub struct TunnelActions {
-    pub addr: GuestAddr,
+    addr: GuestAddr,
     #[serde(flatten)]
-    pub value: CmpAction,
+    value: CmpAction,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 #[serde(transparent)]
 pub struct TunnelConfig {
-    pub actions: Vec<TunnelActions>,
+    actions: Vec<TunnelActions>,
 }
 
 impl TunnelConfig {
-    pub fn setup<QT, S>(&self, hooks: &QemuHooks<QT, S>)
+    pub fn setup<ET, S>(&self, emu_modules: &mut EmulatorModules<ET, S>)
     where
-        QT: QemuHelperTuple<S>,
-        S: UsesInput,
+        ET: Unpin,
+        S: UsesInput + Unpin,
     {
         for TunnelActions {
             addr,
@@ -61,67 +61,77 @@ impl TunnelConfig {
         } in self.actions.clone()
         {
             match action {
-                CmpAction::SetConstant { target, value } => hooks.instruction(
+                CmpAction::SetConstant { target, value } => emu_modules.instructions(
                     addr,
-                    Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _pc| {
-                        log::debug!(
-                            "Tunnel - Constant [{:#x}, {:?}, {:#x}]",
-                            addr,
-                            target,
-                            value
-                        );
-                        hks.qemu().write_reg(target, value).unwrap();
-                    })),
+                    Hook::Closure(Box::new(
+                        move |hks: &mut EmulatorModules<ET, S>, _state, _pc| {
+                            log::debug!(
+                                "Tunnel - Constant [{:#x}, {:?}, {:#x}]",
+                                addr,
+                                target,
+                                value
+                            );
+                            hks.qemu().write_reg(target, value).unwrap();
+                        },
+                    )),
                     false,
                 ),
-                CmpAction::CopyRegister { target, source } => hooks.instruction(
+                CmpAction::CopyRegister { target, source } => emu_modules.instructions(
                     addr,
-                    Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _pc| {
-                        log::debug!(
-                            "Tunnel - Register [{:#x}, {:?}, {:?}]",
-                            addr,
-                            target,
-                            source
-                        );
+                    Hook::Closure(Box::new(
+                        move |hks: &mut EmulatorModules<ET, S>, _state, _pc| {
+                            log::debug!(
+                                "Tunnel - Register [{:#x}, {:?}, {:?}]",
+                                addr,
+                                target,
+                                source
+                            );
 
-                        let value: u32 = hks.qemu().read_reg(source).unwrap();
-                        hks.qemu().write_reg(target, value).unwrap();
-                    })),
+                            let value: u32 = hks.qemu().read_reg(source).unwrap();
+                            hks.qemu().write_reg(target, value).unwrap();
+                        },
+                    )),
                     false,
                 ),
-                CmpAction::Jump { source, target } => hooks.instruction(
+                CmpAction::Jump { source, target } => emu_modules.instructions(
                     addr,
-                    Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _pc| {
-                        log::debug!("Tunnel - Jump [{:#x},{:#x}, {:#x}]", addr, source, target);
-                        let inst: [u8; 2] = generate_branch_call(source, target);
-                        // Patch the instruction by overwriting it
-                        unsafe { hks.qemu().write_mem(source, &inst) }
-                        hks.qemu().flush_jit();
-                    })),
+                    Hook::Closure(Box::new(
+                        move |hks: &mut EmulatorModules<ET, S>, _state, _pc| {
+                            log::debug!("Tunnel - Jump [{:#x},{:#x}, {:#x}]", addr, source, target);
+                            let inst: [u8; 2] = generate_branch_call(source, target);
+                            // Patch the instruction by overwriting it
+                            unsafe { hks.qemu().write_mem(source, &inst) }
+                            hks.qemu().flush_jit();
+                        },
+                    )),
                     true,
                 ),
-                CmpAction::LogRegister { target } => hooks.instruction(
+                CmpAction::LogRegister { target } => emu_modules.instructions(
                     addr,
-                    Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _pc| {
-                        let value: u32 = hks.qemu().read_reg(target).unwrap();
-                        log::debug!("Tunnel - Log [{:#x}, {:?}, {:#x}]", addr, target, value);
-                    })),
+                    Hook::Closure(Box::new(
+                        move |hks: &mut EmulatorModules<ET, S>, _state, _pc| {
+                            let value: u32 = hks.qemu().read_reg(target).unwrap();
+                            log::debug!("Tunnel - Log [{:#x}, {:?}, {:#x}]", addr, target, value);
+                        },
+                    )),
                     false,
                 ),
                 CmpAction::WriteMemory {
                     target: memory_addr,
                     value,
-                } => hooks.instruction(
+                } => emu_modules.instructions(
                     addr,
-                    Hook::Closure(Box::new(move |hks: &mut QemuHooks<QT, S>, _state, _pc| {
-                        log::debug!(
-                            "Tunnel - WriteMem [{:#x}, {:#x}, {:?}]",
-                            addr,
-                            memory_addr,
-                            value
-                        );
-                        unsafe { hks.qemu().write_mem(memory_addr, &value) };
-                    })),
+                    Hook::Closure(Box::new(
+                        move |hks: &mut EmulatorModules<ET, S>, _state, _pc| {
+                            log::debug!(
+                                "Tunnel - WriteMem [{:#x}, {:#x}, {:?}]",
+                                addr,
+                                memory_addr,
+                                value
+                            );
+                            unsafe { hks.qemu().write_mem(memory_addr, &value) };
+                        },
+                    )),
                     false,
                 ),
             };
@@ -130,6 +140,8 @@ impl TunnelConfig {
 }
 
 // TODO handle more encodings this is just the simplest encoding
+
+/// This generates the ARM branch call instruction
 fn generate_branch_call(cur_pc: u32, target: u32) -> [u8; 2] {
     let diff = i32::try_from(target).unwrap() - i32::try_from(cur_pc + 4).unwrap();
     let diff = i16::try_from(diff).unwrap();
@@ -137,7 +149,7 @@ fn generate_branch_call(cur_pc: u32, target: u32) -> [u8; 2] {
     assert!(diff % 2 == 0);
     let mask = (1i16 << 11) - 1;
     let inst = 0b11100 << 11 | ((diff / 2) & mask);
-    println!("Diff: {:#x} Inst: {:b}", diff, inst);
+    log::debug!("Diff: {:#x} Inst: {:b}", diff, inst);
     inst.to_le_bytes()
 }
 

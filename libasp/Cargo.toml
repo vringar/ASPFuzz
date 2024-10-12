@@ -10,9 +10,10 @@ edition = "2021"
 libafl = { workspace=true }
 libafl_bolts = { workspace=true }
 libafl_qemu = { workspace=true }
-serde = { version = "1.0", default-features = false, features = [
+serde = { version = "1.0.210", default-features = false, features = [
     "alloc","derive"
 ] } # serialization lib
 serde_yaml = "*"
 yaml-rust = "0.4.5"
-log = "0.4"
+log = "0.4.22"
+strum = { version = "0.26", features = ["derive"] }

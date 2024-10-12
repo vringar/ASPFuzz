@@ -1,2 +1,1 @@
-[target.x86_64-unknown-linux-gnu]
-rustflags = ["-Zlinker-features=-lld"] # fix nightly bug
+net.git-fetch-with-cli=true
