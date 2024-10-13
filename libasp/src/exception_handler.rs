@@ -1,11 +1,19 @@
 use libafl::prelude::*;
 /// Catching and handling ARM CPU exceptions durign the test-case execution
-use libafl_qemu::*;
-use modules::{
-    EmulatorModule, NopAddressFilter, NopPageFilter, NOP_ADDRESS_FILTER, NOP_PAGE_FILTER,
+use libafl_qemu::{
+    capstone,
+    modules::{
+        EmulatorModule, EmulatorModuleTuple, NopAddressFilter, NopPageFilter, NOP_ADDRESS_FILTER,
+        NOP_PAGE_FILTER,
+    },
+    EmulatorModules, GuestAddr, Hook, HookId, InstructionHookId, Regs,
 };
-use strum::FromRepr;
+use strum::{EnumIter, FromRepr, IntoEnumIterator};
 
+use capstone::{
+    arch::{self, BuildsCapstone},
+    Capstone, InsnDetail,
+};
 use core::fmt::Debug;
 use libafl_bolts::Named;
 use log;
@@ -26,32 +34,124 @@ pub enum ExceptionType {
     UNKNOWN = 8,
 }
 
-// TODO make this depedent on machine register
-// for exception handler base
-pub const ON_CHIP_ADDR: GuestAddr = 0x100;
-
-#[derive(Debug, Default)]
-pub struct ExceptionHandler {
-    exception_vector_base: GuestAddr,
+#[derive(Debug)]
+pub struct ExceptionModule {
     hook_ids: Vec<InstructionHookId>,
+    execption_vector_base: GuestAddr,
+    cs: Capstone,
 }
 
-impl ExceptionHandler {
+impl Default for ExceptionModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExceptionModule {
     pub fn new() -> Self {
-        let exception_vector_base = ON_CHIP_ADDR;
         Self {
-            exception_vector_base,
             hook_ids: vec![],
+            execption_vector_base: 0x0,
+            cs: capstone().detail(true).build().unwrap(),
         }
     }
-    pub fn stop(&self) {
+
+    pub fn update_exception_vector_base<ET, S>(
+        &mut self,
+        emulator_modules: &mut EmulatorModules<ET, S>,
+    ) where
+        ET: EmulatorModuleTuple<S>,
+        S: UsesInput + Unpin + HasMetadata,
+    {
         for &hook_id in &self.hook_ids {
             hook_id.remove(true);
         }
+        self.hook_ids.clear();
+        for enum_value in ExceptionType::iter() {
+            let exception_addr = self.execption_vector_base + 4 * (enum_value as u32);
+            emulator_modules.instructions(
+                exception_addr,
+                Hook::Closure(Box::new(
+                    move |hks: &mut EmulatorModules<ET, S>, state: Option<&mut S>, _pc| {
+                        let state =
+                            state.expect("State should be present when generating block hooks");
+
+                        let meta = state
+                            .metadata_map_mut()
+                            .get_or_insert_with(ExceptionHandlerMetadata::default);
+                        meta.triggered_exception = Some(enum_value);
+                        let emu = hks.qemu();
+                        let sp: u32 = emu.read_reg(Regs::Sp).unwrap();
+                        let lr: u32 = emu.read_reg(Regs::Lr).unwrap();
+                        log::debug!("Exception:{enum_value:?} sp: {sp:#x} lr: {lr:#x}");
+                        emu.current_cpu().unwrap().trigger_breakpoint();
+                    },
+                )),
+                true,
+            );
+        }
+    }
+    pub fn hook_vbar_writes<ET, S>(
+        emulator_modules: &mut EmulatorModules<ET, S>,
+        _state: Option<&mut S>,
+        pc: GuestAddr,
+    ) -> Option<u64>
+    where
+        ET: EmulatorModuleTuple<S>,
+        S: UsesInput + Unpin + HasMetadata,
+    {
+        if let Some(h) = emulator_modules.get_mut::<Self>() {
+            h.cs.set_mode(if pc & 1 == 1 {
+                arch::arm::ArchMode::Thumb.into()
+            } else {
+                arch::arm::ArchMode::Arm.into()
+            })
+            .unwrap();
+        }
+
+        let qemu = emulator_modules.qemu();
+        if let Some(h) = emulator_modules.modules().match_first_type::<Self>() {
+            let code = &mut [0; 512];
+            unsafe { qemu.read_mem(pc, code) };
+            let mut iaddr = pc;
+
+            'disasm: while let Ok(insns) = h.cs.disasm_count(code, iaddr.into(), 1) {
+                if insns.is_empty() {
+                    break;
+                }
+                let insn = insns.first().unwrap();
+                let insn_detail: InsnDetail = h.cs.insn_detail(insn).unwrap();
+                for detail in insn_detail.groups() {
+                    match u32::from(detail.0) {
+                        // Anything that gets us out of the block makes the rest of the block irrelevant
+                        capstone::InsnGroupType::CS_GRP_RET
+                        | capstone::InsnGroupType::CS_GRP_INVALID
+                        | capstone::InsnGroupType::CS_GRP_JUMP
+                        | capstone::InsnGroupType::CS_GRP_IRET
+                        | capstone::InsnGroupType::CS_GRP_PRIVILEGE => {
+                            break 'disasm;
+                        }
+                        _ => {}
+                    }
+                }
+                if insn.mnemonic().unwrap() == "MCR" {
+                    log::error!(
+                        "MCR instruction found, operands are {:?}",
+                        insn.op_str().unwrap()
+                    );
+                }
+                iaddr += insn.bytes().len() as GuestAddr;
+
+                unsafe {
+                    qemu.read_mem(pc, code);
+                }
+            }
+        }
+        None
     }
 }
 
-impl<S> EmulatorModule<S> for ExceptionHandler
+impl<S> EmulatorModule<S> for ExceptionModule
 where
     S: UsesInput + Unpin + HasMetadata,
 {
@@ -75,33 +175,21 @@ where
         unsafe { addr_of_mut!(NOP_PAGE_FILTER).as_mut().unwrap().get_mut() }
     }
 
+    fn init_module<ET>(&self, emulator_modules: &mut EmulatorModules<ET, S>)
+    where
+        ET: EmulatorModuleTuple<S>,
+    {
+        emulator_modules.blocks(
+            Hook::Function(Self::hook_vbar_writes),
+            Hook::Empty,
+            Hook::Empty,
+        );
+    }
     fn first_exec<ET>(&mut self, emulator_modules: &mut EmulatorModules<ET, S>, _state: &mut S)
     where
-        ET: modules::EmulatorModuleTuple<S>,
+        ET: EmulatorModuleTuple<S>,
     {
-        for enum_value in ExceptionType::iter() {
-            let exception_addr = self.exception_vector_base + 4 * (enum_value as u32);
-            emulator_modules.instructions(
-                exception_addr,
-                Hook::Closure(Box::new(
-                    move |hks: &mut EmulatorModules<ET, S>, state: Option<&mut S>, _pc| {
-                        let state =
-                            state.expect("State should be present when generating block hooks");
-
-                        let meta = state
-                            .metadata_map_mut()
-                            .get_or_insert_with(ExceptionHandlerMetadata::default);
-                        meta.triggered_exception = Some(enum_value);
-                        let emu = hks.qemu();
-                        let sp: u32 = emu.read_reg(Regs::Sp).unwrap();
-                        let lr: u32 = emu.read_reg(Regs::Lr).unwrap();
-                        log::debug!("Exception:{enum_value:?} sp: {sp:#x} lr: {lr:#x}");
-                        emu.current_cpu().unwrap().trigger_breakpoint();
-                    },
-                )),
-                true,
-            );
-        }
+        self.update_exception_vector_base(emulator_modules)
     }
 }
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -128,12 +216,10 @@ where
         _observers: &OT,
         _exit_kind: &ExitKind,
     ) -> Result<bool, Error> {
-        let meta = state
-            .metadata_map_mut()
-            .get_or_insert_with(ExceptionHandlerMetadata::default);
-        if meta.triggered_exception.is_some() {
+        let meta: Option<&ExceptionHandlerMetadata> = state.metadata_map_mut().get();
+        if let Some(meta) = meta {
             log::info!("ExceptionFeedback=True");
-            Ok(true)
+            Ok(meta.triggered_exception.is_some())
         } else {
             Ok(false)
         }

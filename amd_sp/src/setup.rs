@@ -44,7 +44,7 @@ pub fn parse_args() -> Vec<String> {
         println!("For multicore fuzzing a core number must be provided (`cargo make run_fast -h`)");
         exit(3);
     };
-    init_global_conf(&cli_args.yaml_path, num_cores, run_dir);
+    init_global_conf(&cli_args.yaml_path, num_cores, run_dir.clone());
     let conf = borrow_global_conf().unwrap();
 
     //Check if pathes exist
@@ -70,7 +70,10 @@ pub fn parse_args() -> Vec<String> {
         qemu_args.append(&mut vec![
             "-d".to_string(),
             "trace:ccp_*,trace:psp_*".to_string(),
+            "-D".to_string(),
+            format!["{}/logs/qemu.log", run_dir.display()],
         ]);
+        log::info!("Debug mode enabled");
     }
     qemu_args.extend(vec![
         "--machine".to_string(),

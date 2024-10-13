@@ -1,6 +1,3 @@
-//! This module contains an implementation of the
-//!
-
 use std::ptr::addr_of_mut;
 
 use crate::config::YAMLConfig;
@@ -12,7 +9,12 @@ use libafl_qemu::{
     },
     EmulatorModules,
 };
+use serde::{Deserialize, Serialize};
 
+/// This module is a general utility module for things that weren't big enough to warrant their own module
+///
+/// This includes the Tunnels, since they are fully stateless and so need neither a Module nor Metadata
+/// It is also responsible for updating the range map for DrCov and the Interupt Base address for the Exception Handler
 #[derive(Debug)]
 pub struct LibAspModule {
     config: YAMLConfig,
@@ -23,6 +25,11 @@ impl LibAspModule {
         LibAspModule { config: conf }
     }
 }
+#[derive(Debug, Default, Serialize, Deserialize)]
+
+struct MiscMetadata {}
+libafl_bolts::impl_serdeany!(MiscMetadata);
+
 impl<S> EmulatorModule<S> for LibAspModule
 where
     S: UsesInput + Unpin,

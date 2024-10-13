@@ -8,7 +8,7 @@ use input::InputConfig;
 
 pub mod crash;
 use crate::reset_state::ResetLevel;
-use crate::LibAspModule;
+use crate::{ExceptionModule, LibAspModule};
 use crash::{CrashConfig, CrashModule};
 /// Parsing the YAML config file
 use libafl_qemu::*;
@@ -49,6 +49,23 @@ impl ZenVersion {
             ZenVersion::Zen3 => "amd-psp-zen3",
             ZenVersion::Zen4 => panic!("Zen4 is currently not supported"),
             ZenVersion::ZenTesla => "amd-psp-zentesla",
+        }
+    }
+    /// This function returns a list of possible addresses that jumps into the on-chip BL
+    /// This is used to update the `on_chip_bl_path` in the `QemuConf`
+    pub fn get_last_off_chip_bl_instruction(&self) -> Vec<GuestAddr> {
+        match self {
+            ZenVersion::Zen2 => vec![0xffff24f8],
+            _ => todo!(),
+        }
+    }
+
+    /// This function returns a list of possible addresses that jumps into the on-chip BL
+    /// This is used to update the `on_chip_bl_path` in the `QemuConf`
+    pub fn get_last_on_chip_bl_instruction(&self) -> Vec<GuestAddr> {
+        match self {
+            ZenVersion::Zen2 => vec![0x450],
+            _ => todo!(),
         }
     }
 }
@@ -127,13 +144,16 @@ impl YAMLConfig {
 
         serde_yaml::from_reader(file).unwrap()
     }
-    pub fn get_emulator_modules<S>(&self) -> tuple_list_type!(LibAspModule, CrashModule)
+    pub fn get_emulator_modules<S>(
+        &self,
+    ) -> tuple_list_type!(LibAspModule, CrashModule, ExceptionModule)
     where
         S: UsesInput + Unpin,
     {
         tuple_list!(
             LibAspModule::new(self.clone()),
-            CrashModule::new(self.crashes.clone())
+            CrashModule::new(self.crashes.clone()),
+            ExceptionModule::new()
         )
     }
 }

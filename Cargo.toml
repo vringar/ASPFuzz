@@ -19,6 +19,7 @@ libafl_qemu = {  git = "ssh://git@git.tu-berlin.de/pspreverse/libafl.git", branc
 [profile.dev]
 debug = true
 debug-assertions = true
+
 [profile.release]
 debug = true
 debug-assertions = true

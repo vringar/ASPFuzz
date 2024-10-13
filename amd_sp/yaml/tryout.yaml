@@ -11,14 +11,15 @@ flash:
   # Base image in flash memory
   base: "bins/PRIME-X370-PRO-ASUS-6203.ROM"
 
-debug: false
+debug: true
 input:
   flash:
     # No initial content
-  mem:
-    # Mailbox and Pointer
-    - addr: 0x03010570
-      size: 0xc
+  psp:
+    input:
+      # Mailbox and Pointer
+      - addr: 0x03010570
+        size: 0xc
   fixed:
     # Setting up fixed addr doesn't work when using off-chip
 

@@ -83,6 +83,7 @@ pub fn fuzz() -> Result<(), Error> {
         .create_initial_inputs(conf.yaml_config.flash.size, &input_dir);
     let input_dir = Box::new(input_dir);
     let mut run_client = move |state: Option<MyState>, mut mgr, _core_id| {
+        log::error!("Starting client");
         let conf = get_run_conf().unwrap();
         // Configure DrCov helper
         let mut log_drcov_path = log_dir.clone();
@@ -140,11 +141,13 @@ pub fn fuzz() -> Result<(), Error> {
         // emu.save_snapshot("start", true);
 
         let snap = qemu.create_fast_snapshot(true);
-
+        log::error!("Snapshot created");
         // The wrapped harness function, calling out to the LLVM-style harness
         let mut harness = |emulator: &mut Emulator<_, _, _, MyState, _>,
                            _state: &mut MyState,
                            input: &BytesInput| {
+            log::error!("Starting harness");
+
             let dr_cov_module = emulator
                 .modules_mut()
                 .get_mut::<DrCovModule<StdAddressFilter>>()
@@ -156,17 +159,25 @@ pub fn fuzz() -> Result<(), Error> {
                 StdAddressFilter::allow_list(vec![]),
             );
             conf.yaml_config.input.apply_input(input);
-
+            log::error!("Starting QEMU");
             unsafe {
                 match emulator.qemu().run() {
                     Ok(QemuExitReason::Breakpoint(_)) => {} // continue execution, nothing to do there.
-                    Ok(QemuExitReason::Timeout) => return ExitKind::Timeout, // timeout, propagate
+                    Ok(QemuExitReason::Timeout) => {
+                        log::error!("Timeout");
+
+                        return ExitKind::Timeout;
+                    } // timeout, propagate
                     Ok(QemuExitReason::End(QemuShutdownCause::HostSignal(signal))) => {
+                        log::error!("HostSignal");
                         // will take care of cleanly stopping the fuzzer.
                         signal.handle()
                     }
 
-                    Err(QemuExitError::UnexpectedExit) => return ExitKind::Crash,
+                    Err(QemuExitError::UnexpectedExit) => {
+                        log::error!("Crash");
+                        return ExitKind::Crash;
+                    }
                     e => panic!("Unexpected QEMU exit: {e:?}."),
                 }
 
@@ -187,7 +198,7 @@ pub fn fuzz() -> Result<(), Error> {
 
                 // OPTION 3: restore a fast devices+mem snapshot
                 qemu.restore_fast_snapshot(snap);
-
+                log::error!("Harness done with exit code {ret:?}");
                 ret
             }
         };

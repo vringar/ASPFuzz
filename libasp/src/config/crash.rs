@@ -11,7 +11,7 @@ use libafl_qemu::{
     sys::TCGTemp,
     EmulatorModules, GuestAddr, Hook, MemAccessInfo, Regs,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct NoExecConfig {
@@ -43,22 +43,25 @@ pub struct CrashConfig {
     mmap: MmapConfig,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default)]
 struct CrashMetadata {
     counter_write_hooks: u64,
     counter_edge_hooks: u64,
     flash_read_hook_id: u64,
 }
-libafl_bolts::impl_serdeany!(CrashMetadata);
 
 #[derive(Debug)]
 pub struct CrashModule {
     c: CrashConfig,
+    meta: CrashMetadata,
 }
 
 impl CrashModule {
     pub fn new(conf: CrashConfig) -> Self {
-        CrashModule { c: conf }
+        CrashModule {
+            c: conf,
+            meta: CrashMetadata::default(),
+        }
     }
 }
 
@@ -117,7 +120,7 @@ where
 
 fn gen_block_hook<ET, S>(
     modules: &mut EmulatorModules<ET, S>,
-    state: Option<&mut S>,
+    _state: Option<&mut S>,
     src: GuestAddr,
 ) -> Option<u64>
 where
@@ -128,11 +131,7 @@ where
         .modules_mut()
         .match_first_type_mut()
         .expect("This should only run with a FlashHookConfig");
-    let state: &mut S = state.expect("State should be present when generating block hooks");
-
-    let meta = state
-        .metadata_map_mut()
-        .get_or_insert_with(CrashMetadata::default);
+    let meta = &mut module.meta;
     let id = meta.counter_edge_hooks;
     meta.counter_edge_hooks += 1;
     for no_exec in module.c.mmap.no_exec.iter() {
@@ -152,7 +151,7 @@ where
     }
     None
 }
-fn exec_block_hook<ET, S>(modules: &mut EmulatorModules<ET, S>, state: Option<&mut S>, id: u64)
+fn exec_block_hook<ET, S>(modules: &mut EmulatorModules<ET, S>, _state: Option<&mut S>, id: u64)
 where
     S: UsesInput + Unpin + HasMetadata,
     ET: EmulatorModuleTuple<S>,
@@ -162,12 +161,7 @@ where
         .modules()
         .match_first_type()
         .expect("This should only run with a FlashHookConfig");
-    let state: &mut S = state.expect("State should be present when generating block hooks");
-
-    let meta = state
-        .metadata_map_mut()
-        .get_or_insert_with(CrashMetadata::default);
-    if meta.flash_read_hook_id == id {
+    if module.meta.flash_read_hook_id == id {
         let cpu = emu.current_cpu().unwrap();
         let pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
         log::debug!("Flash read fn id was hit");
@@ -214,7 +208,7 @@ where
 
 fn gen_writes_hook<ET, S>(
     modules: &mut EmulatorModules<ET, S>,
-    state: Option<&mut S>,
+    _state: Option<&mut S>,
     pc: GuestAddr,
     _: *mut TCGTemp,
     mem_acces_info: MemAccessInfo,
@@ -223,15 +217,12 @@ where
     S: UsesInput + Unpin + HasMetadata,
     ET: EmulatorModuleTuple<S>,
 {
-    let module: &CrashModule = modules
-        .modules()
-        .match_first_type()
+    let module: &mut CrashModule = modules
+        .modules_mut()
+        .match_first_type_mut()
         .expect("This should only run with a FlashHookConfig");
-    let state: &mut S = state.expect("State should be present when generating write hooks");
 
-    let meta = state
-        .metadata_map_mut()
-        .get_or_insert_with(CrashMetadata::default);
+    let meta = &mut module.meta;
     // TODO: for known write locations at "compile" time
     // Don't emit hooks if they are outside of range
     for ForbiddenWritesConfig {

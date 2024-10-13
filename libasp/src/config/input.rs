@@ -1,4 +1,5 @@
 use libafl::inputs::{BytesInput, HasTargetBytes};
+use libafl::Error;
 use libafl_bolts::AsSlice;
 use libafl_qemu::sys::GuestUsize;
 /// Generate initial inputs for the fuzzer based on provided UEFI images
@@ -26,8 +27,9 @@ pub struct FixedLocation {
 #[derive(Clone, Deserialize, Debug)]
 pub struct FlashConfig {
     base: Vec<PathBuf>,
-
+    #[serde(default)]
     input: Vec<InputLocation>,
+    #[serde(default)]
     fixed: Vec<FixedLocation>,
 }
 impl FlashConfig {
@@ -55,7 +57,9 @@ impl FlashConfig {
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct MemoryConfig {
+    #[serde(default)]
     input: Vec<InputLocation>,
+    #[serde(default)]
     fixed: Vec<FixedLocation>,
 }
 impl MemoryConfig {
@@ -142,11 +146,15 @@ impl InputConfig {
             target_buf = &target_buf[flash.size()..];
             flash.apply_input(flash_buf);
         }
-        let cpu = &Qemu::get().unwrap().current_cpu().unwrap();
+        let qemu = Qemu::get().unwrap();
+        let cpu = &qemu.cpu_from_index(0);
+
         if let Some(x86) = self.x86.as_ref() {
             let x86_buf = &target_buf[..x86.size()];
             target_buf = &target_buf[x86.size()..];
-            x86.apply_input(x86_buf, |addr, buf| write_x86_mem(cpu, addr, buf));
+            x86.apply_input(x86_buf, |addr, buf| {
+                write_x86_mem(cpu, addr, buf).expect("Failed to write to memory")
+            });
         }
 
         if let Some(psp) = self.psp.as_ref() {
@@ -161,7 +169,7 @@ impl InputConfig {
 
 extern "C" {
     fn aspfuzz_write_smn_flash(addr: GuestAddr, len: i32, buf: *mut u8);
-    fn aspfuzz_x86_write(addr: GuestAddr, buf: *mut u8, len: i32);
+    fn aspfuzz_x86_write(addr: GuestAddr, buf: *mut u8, len: i32) -> i32;
 }
 /// # Safety
 /// This function should only be called if QEMU has been fully initialized
@@ -170,8 +178,14 @@ pub unsafe fn write_flash_mem(addr: GuestAddr, buf: &[u8]) {
     aspfuzz_write_smn_flash(addr, buf.len() as i32, buf.as_ptr() as *mut u8);
 }
 /// Provide the CPU as proof that QEMU has been initialized and is halted
-pub fn write_x86_mem(_cpu: &CPU, addr: GuestAddr, buf: &[u8]) {
+pub fn write_x86_mem(_cpu: &CPU, addr: GuestAddr, buf: &[u8]) -> Result<(), Error> {
+    let i;
     unsafe {
-        aspfuzz_x86_write(addr, buf.as_ptr() as *mut u8, buf.len() as i32);
+        i = aspfuzz_x86_write(addr, buf.as_ptr() as *mut u8, buf.len() as i32);
+    }
+    if i == 0 {
+        Ok(())
+    } else {
+        Err(Error::illegal_state("Failed to write to x86 memory"))
     }
 }

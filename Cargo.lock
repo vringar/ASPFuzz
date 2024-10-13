@@ -870,6 +870,7 @@ dependencies = [
 name = "libasp"
 version = "0.1.0"
 dependencies = [
+ "capstone",
  "libafl",
  "libafl_bolts",
  "libafl_qemu",

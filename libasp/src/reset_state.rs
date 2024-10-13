@@ -1,4 +1,5 @@
 /// Custom resetting of the state aka. snapshotting
+/// This module is currently unused as the built-in snapshotting has improved significantly
 use std::fmt::{Debug, Formatter};
 
 use libafl_qemu::*;
