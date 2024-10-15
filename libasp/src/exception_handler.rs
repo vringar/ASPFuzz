@@ -1,19 +1,14 @@
 use libafl::prelude::*;
 /// Catching and handling ARM CPU exceptions durign the test-case execution
 use libafl_qemu::{
-    capstone,
     modules::{
         EmulatorModule, EmulatorModuleTuple, NopAddressFilter, NopPageFilter, NOP_ADDRESS_FILTER,
         NOP_PAGE_FILTER,
     },
-    EmulatorModules, GuestAddr, Hook, HookId, InstructionHookId, Regs,
+    EmulatorModules, Hook, HookId, InstructionHookId, Regs,
 };
 use strum::{EnumIter, FromRepr, IntoEnumIterator};
 
-use capstone::{
-    arch::{self, BuildsCapstone},
-    Capstone, InsnDetail,
-};
 use core::fmt::Debug;
 use libafl_bolts::Named;
 use log;
@@ -37,8 +32,8 @@ pub enum ExceptionType {
 #[derive(Debug)]
 pub struct ExceptionModule {
     hook_ids: Vec<InstructionHookId>,
-    execption_vector_base: GuestAddr,
-    cs: Capstone,
+    // execption_vector_base: GuestAddr,
+    //cs: Capstone,
 }
 
 impl Default for ExceptionModule {
@@ -51,8 +46,8 @@ impl ExceptionModule {
     pub fn new() -> Self {
         Self {
             hook_ids: vec![],
-            execption_vector_base: 0x0,
-            cs: capstone().detail(true).build().unwrap(),
+            // execption_vector_base: 0x0,
+            //cs: capstone().detail(true).build().unwrap(),
         }
     }
 
@@ -67,8 +62,10 @@ impl ExceptionModule {
             hook_id.remove(true);
         }
         self.hook_ids.clear();
+
         for enum_value in ExceptionType::iter() {
-            let exception_addr = self.execption_vector_base + 4 * (enum_value as u32);
+            // This is fine as long as we don't reach the tOS
+            let exception_addr = 0x100 + 4 * (enum_value as u32);
             emulator_modules.instructions(
                 exception_addr,
                 Hook::Closure(Box::new(
@@ -91,64 +88,69 @@ impl ExceptionModule {
             );
         }
     }
-    pub fn hook_vbar_writes<ET, S>(
-        emulator_modules: &mut EmulatorModules<ET, S>,
-        _state: Option<&mut S>,
-        pc: GuestAddr,
-    ) -> Option<u64>
-    where
-        ET: EmulatorModuleTuple<S>,
-        S: UsesInput + Unpin + HasMetadata,
-    {
-        if let Some(h) = emulator_modules.get_mut::<Self>() {
-            h.cs.set_mode(if pc & 1 == 1 {
-                arch::arm::ArchMode::Thumb.into()
-            } else {
-                arch::arm::ArchMode::Arm.into()
-            })
-            .unwrap();
-        }
 
-        let qemu = emulator_modules.qemu();
-        if let Some(h) = emulator_modules.modules().match_first_type::<Self>() {
-            let code = &mut [0; 512];
-            unsafe { qemu.read_mem(pc, code) };
-            let mut iaddr = pc;
+    // When this block hook is set it completely freezes on startup
+    // However, this would be the correct way to set a hook on the vector table changing
+    // Inspired by libafl_qemu/src/modules/call.rs
+    // fn hook_vbar_writes<ET, S>(
+    //     emulator_modules: &mut EmulatorModules<ET, S>,
+    //     _state: Option<&mut S>,
+    //     pc: GuestAddr,
+    // ) -> Option<u64>
+    // where
+    //     ET: EmulatorModuleTuple<S>,
+    //     S: UsesInput + Unpin + HasMetadata,
+    // {
+    //     todo!("hook_vbar_writes is not working, it freezes the emulator on startup");
+    // if let Some(h) = emulator_modules.get_mut::<Self>() {
+    //     h.cs.set_mode(if pc & 1 == 1 {
+    //         arch::arm::ArchMode::Thumb.into()
+    //     } else {
+    //         arch::arm::ArchMode::Arm.into()
+    //     })
+    //     .unwrap();
+    // }
 
-            'disasm: while let Ok(insns) = h.cs.disasm_count(code, iaddr.into(), 1) {
-                if insns.is_empty() {
-                    break;
-                }
-                let insn = insns.first().unwrap();
-                let insn_detail: InsnDetail = h.cs.insn_detail(insn).unwrap();
-                for detail in insn_detail.groups() {
-                    match u32::from(detail.0) {
-                        // Anything that gets us out of the block makes the rest of the block irrelevant
-                        capstone::InsnGroupType::CS_GRP_RET
-                        | capstone::InsnGroupType::CS_GRP_INVALID
-                        | capstone::InsnGroupType::CS_GRP_JUMP
-                        | capstone::InsnGroupType::CS_GRP_IRET
-                        | capstone::InsnGroupType::CS_GRP_PRIVILEGE => {
-                            break 'disasm;
-                        }
-                        _ => {}
-                    }
-                }
-                if insn.mnemonic().unwrap() == "MCR" {
-                    log::error!(
-                        "MCR instruction found, operands are {:?}",
-                        insn.op_str().unwrap()
-                    );
-                }
-                iaddr += insn.bytes().len() as GuestAddr;
+    // let qemu = emulator_modules.qemu();
+    // if let Some(h) = emulator_modules.modules().match_first_type::<Self>() {
+    //     let code = &mut [0; 512];
+    //     unsafe { qemu.read_mem(pc, code) };
+    //     let mut iaddr = pc;
 
-                unsafe {
-                    qemu.read_mem(pc, code);
-                }
-            }
-        }
-        None
-    }
+    //     'disasm: while let Ok(insns) = h.cs.disasm_count(code, iaddr.into(), 1) {
+    //         if insns.is_empty() {
+    //             break;
+    //         }
+    //         let insn = insns.first().unwrap();
+    //         let insn_detail: InsnDetail = h.cs.insn_detail(insn).unwrap();
+    //         for detail in insn_detail.groups() {
+    //             match u32::from(detail.0) {
+    //                 // Anything that gets us out of the block makes the rest of the block irrelevant
+    //                 capstone::InsnGroupType::CS_GRP_RET
+    //                 | capstone::InsnGroupType::CS_GRP_INVALID
+    //                 | capstone::InsnGroupType::CS_GRP_JUMP
+    //                 | capstone::InsnGroupType::CS_GRP_IRET
+    //                 | capstone::InsnGroupType::CS_GRP_PRIVILEGE => {
+    //                     break 'disasm;
+    //                 }
+    //                 _ => {}
+    //             }
+    //         }
+    //         if insn.mnemonic().unwrap() == "MCR" {
+    //             log::error!(
+    //                 "MCR instruction found, operands are {:?}",
+    //                 insn.op_str().unwrap()
+    //             );
+    //         }
+    //         iaddr += insn.bytes().len() as GuestAddr;
+
+    //         unsafe {
+    //             qemu.read_mem(pc, code);
+    //         }
+    //     }
+    // }
+    // None
+    //}
 }
 
 impl<S> EmulatorModule<S> for ExceptionModule
@@ -179,11 +181,12 @@ where
     where
         ET: EmulatorModuleTuple<S>,
     {
-        emulator_modules.blocks(
-            Hook::Function(Self::hook_vbar_writes),
-            Hook::Empty,
-            Hook::Empty,
-        );
+        // TODO: figure out why this is so slow
+        // emulator_modules.blocks(
+        //     Hook::Function(Self::hook_vbar_writes),
+        //     Hook::Empty,
+        //     Hook::Empty,
+        // );
     }
     fn first_exec<ET>(&mut self, emulator_modules: &mut EmulatorModules<ET, S>, _state: &mut S)
     where
