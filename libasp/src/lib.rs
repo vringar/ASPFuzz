@@ -18,6 +18,8 @@ pub mod emulator_module;
 pub use emulator_module::*;
 
 pub mod config;
+pub mod memory;
+pub use memory::*;
 
 #[derive(Debug, Clone, Default)]
 pub enum BootStage {

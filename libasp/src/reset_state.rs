@@ -109,9 +109,8 @@ impl ResetState {
 
         // Saving SRAM
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
-        unsafe {
-            cpu.read_mem(SRAM_START, &mut self.sram);
-        }
+        cpu.read_mem(SRAM_START, &mut self.sram)
+            .expect("SRAM read failed");
 
         // Saving ASP timer state
         unsafe {
@@ -148,9 +147,8 @@ impl ResetState {
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
         let sram_size: u32 = self.sram.len().try_into().unwrap();
         let sram_slice = &self.sram[((sram_size - LAZY_SRAM_SIZE) as usize)..self.sram.len()];
-        unsafe {
-            cpu.write_mem(sram_size - LAZY_SRAM_SIZE, sram_slice);
-        }
+        cpu.write_mem(sram_size - LAZY_SRAM_SIZE, sram_slice)
+            .expect("SRAM write failed");
     }
 
     /* Rust snapshot reset */
@@ -162,9 +160,8 @@ impl ResetState {
 
         // Resetting SRAM
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
-        unsafe {
-            cpu.write_mem(SRAM_START, &self.sram);
-        }
+        cpu.write_mem(SRAM_START, &self.sram)
+            .expect("SRAM write failed");
 
         // Resetting timer
         unsafe {
@@ -223,9 +220,8 @@ impl ResetState {
 
         // Zero SRAM
         let zero_sram = vec![0; self.sram.len()];
-        unsafe {
-            cpu.write_mem(SRAM_START, &zero_sram);
-        }
+        cpu.write_mem(SRAM_START, &zero_sram)
+            .expect("SRAM write failed");
 
         // Zero timer
         unsafe {
@@ -262,9 +258,9 @@ impl ResetState {
 
     pub fn current_sram_to_file(&mut self, emu: &Qemu) {
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
-        unsafe {
-            cpu.write_mem(SRAM_START, &self.sram);
-        }
+        cpu.write_mem(SRAM_START, &self.sram)
+            .expect("SRAM write failed");
+
         let mut file = File::create("sram.dump").unwrap();
         file.write_all(&self.sram).unwrap();
     }

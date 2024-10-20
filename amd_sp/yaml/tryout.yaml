@@ -9,7 +9,7 @@ flash:
   # Size of flash memory
   size: 0x1000000
   # Base image in flash memory
-  base: "bins/PRIME-X370-PRO-ASUS-6203.ROM"
+  base: "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
 
 debug: true
 input:
@@ -17,19 +17,24 @@ input:
     # No initial content
   psp:
     input:
-      # Mailbox and Pointer
-      - addr: 0x03010570
-        size: 0xc
-  fixed:
-    # Setting up fixed addr doesn't work when using off-chip
+      # Is master maybe
+      - addr: 0x10804
+        size: 0x4
+    fixed:
+      # Setting up fixed addr doesn't work when using off-chip
+      - addr: 0x108ae
+        val: 0xFFFF
+      - addr: 0x108c4
+        val: 0x0
+  mailbox: true
 
 
 # Harness
 harness:
   # cold_boot call to x86_workloop #
   # start: 0x116c
-  # Start from on-chip-bl and see how far we get
-  start: 0xffff0000
+  # Start of psp_recovery_mode_workloop in cold boot to SecOS
+  start: 0xd302
   sinks:
     # sts_report_to_x86_hang_on_error in loop
     - 0x7274
@@ -59,24 +64,34 @@ tunnels:
     action: Jump
     source: 0x2a1c # what gets overwritten
     target: 0x2a2a # where to jump to
-  # Message has been sent
-  - addr:   0x9408
-    action: WriteMemory
-    target: 0x108ae
-    value: [0x1]
+  # SKIP JUMP TO SECOS -> Go to recovery mailbox
+  - addr: 0x2a2a
+    action: Jump
+    source: 0xd2e8
+    target: 0xd2fc
 
-  ### Jump To SecOS stuff
-  # Log error code of load_app_id_from_flash
-  - addr: 0xd26e
-    action: LogRegister
-    target: R0
   # Debug error state
   - addr: 0xa9a4
     action: LogRegister
     target: LR
-  - addr: 0x7246
+  - addr: 0x7272
     action: LogRegister
-    target: R0
+    target: R1
+  - addr: 0xfca
+    action: LogRegister
+    target: R5
+  - addr: 0x1048
+    action: LogRegister
+    target: R1
+  - addr: 0x907a
+    action: LogMemory
+    target: 0x3010570
+    size: 4
+  - addr: 0xfac
+    action: LogMemory
+    target: 0x3010570
+    size: 4
+
 
 crashes:
   # Breakpoints as crashes

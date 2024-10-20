@@ -15,7 +15,7 @@ use log;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ptr::addr_of_mut};
 
-#[derive(Copy, Clone, Serialize, Deserialize, Debug, FromRepr, EnumIter)]
+#[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug, FromRepr, EnumIter)]
 #[repr(u32)]
 pub enum ExceptionType {
     RESET = 0,
@@ -66,6 +66,9 @@ impl ExceptionModule {
         for enum_value in ExceptionType::iter() {
             // This is fine as long as we don't reach the tOS
             let exception_addr = 0x100 + 4 * (enum_value as u32);
+            if enum_value == ExceptionType::RESET || enum_value == ExceptionType::SVC {
+                continue;
+            }
             emulator_modules.instructions(
                 exception_addr,
                 Hook::Closure(Box::new(
@@ -130,10 +133,11 @@ impl ExceptionModule {
     //                 | capstone::InsnGroupType::CS_GRP_INVALID
     //                 | capstone::InsnGroupType::CS_GRP_JUMP
     //                 | capstone::InsnGroupType::CS_GRP_IRET
-    //                 | capstone::InsnGroupType::CS_GRP_PRIVILEGE => {
+    //                 |  => {
     //                     break 'disasm;
     //                 }
-    //                 _ => {}
+    //                 capstone::InsnGroupType::CS_GRP_PRIVILEGE => {}
+    //                 _ => {continue 'disasm;}
     //             }
     //         }
     //         if insn.mnemonic().unwrap() == "MCR" {
@@ -177,7 +181,7 @@ where
         unsafe { addr_of_mut!(NOP_PAGE_FILTER).as_mut().unwrap().get_mut() }
     }
 
-    fn init_module<ET>(&self, emulator_modules: &mut EmulatorModules<ET, S>)
+    fn init_module<ET>(&self, _emulator_modules: &mut EmulatorModules<ET, S>)
     where
         ET: EmulatorModuleTuple<S>,
     {

@@ -1,12 +1,15 @@
+use byteorder::{LittleEndian, ReadBytesExt};
 use libafl::inputs::{BytesInput, HasTargetBytes};
-use libafl::Error;
 use libafl_bolts::AsSlice;
 use libafl_qemu::sys::GuestUsize;
 /// Generate initial inputs for the fuzzer based on provided UEFI images
-use libafl_qemu::{GuestAddr, Qemu, CPU};
+use libafl_qemu::{GuestAddr, Qemu};
 use serde::Deserialize;
-use std::fs;
 use std::path::PathBuf;
+use std::{fs, vec};
+
+use crate::config::get_run_conf;
+use crate::{write_flash_mem, write_mailbox_value, write_x86_mem};
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct InputLocation {
@@ -68,12 +71,19 @@ impl MemoryConfig {
     }
     fn apply_input(&self, mut buf: &[u8], writer: impl Fn(GuestAddr, &[u8])) {
         for input_location in self.input.iter() {
+            log::debug!(
+                "Writing input to memory: {:#x} size: {} value: {:02x?}",
+                input_location.addr,
+                input_location.size,
+                &buf[..input_location.size]
+            );
             writer(input_location.addr, &buf[..input_location.size]);
             buf = &buf[input_location.size..];
         }
 
         // Fixed values to memory
         for &FixedLocation { addr, val } in self.fixed.iter() {
+            log::debug!("Writing constant at {:#x} value: {}", addr, val);
             let buffer = val.to_ne_bytes();
             writer(addr, &buffer);
         }
@@ -89,6 +99,8 @@ pub struct InputConfig {
     x86: Option<MemoryConfig>,
     #[serde(default)]
     psp: Option<MemoryConfig>,
+    #[serde(default)]
+    mailbox: Option<bool>,
 }
 
 impl InputConfig {
@@ -96,6 +108,7 @@ impl InputConfig {
         self.flash.as_ref().map(|i| i.size()).unwrap_or(0)
             + self.x86.as_ref().map(|i| i.size()).unwrap_or(0)
             + self.psp.as_ref().map(|i| i.size()).unwrap_or(0)
+            + if self.mailbox.unwrap_or(false) { 12 } else { 0 }
     }
 }
 
@@ -133,14 +146,23 @@ impl InputConfig {
 
         let mut new_input_path = PathBuf::from(&input_dir);
         new_input_path.push("input0000");
-        fs::write(new_input_path, vec![0; input_total_size]).unwrap();
+        fs::write(new_input_path, vec![0_u8; input_total_size]).unwrap();
     }
 
     pub fn apply_input(&self, input: &BytesInput) {
         // Input to memory
         let target = input.target_bytes();
-        let mut target_buf = target.as_slice();
-
+        let input_bytes = target.as_slice();
+        if get_run_conf().unwrap().yaml_config.debug {
+            log::info!(
+                "Input bytes length: {} value: {:02x?}",
+                input_bytes.len(),
+                input_bytes
+            );
+        }
+        let mut tmp_vec = Vec::from(input_bytes);
+        tmp_vec.resize(self.total_size(), 0);
+        let mut target_buf = tmp_vec.as_slice();
         if let Some(flash) = self.flash.as_ref() {
             let flash_buf = &target_buf[..flash.size()];
             target_buf = &target_buf[flash.size()..];
@@ -158,34 +180,28 @@ impl InputConfig {
         }
 
         if let Some(psp) = self.psp.as_ref() {
-            let x86_buf = &target_buf[..psp.size()];
+            let psp_buf = &target_buf[..psp.size()];
             target_buf = &target_buf[psp.size()..];
-            psp.apply_input(x86_buf, |addr, buf| unsafe { cpu.write_mem(addr, buf) });
+            psp.apply_input(psp_buf, |addr, buf| {
+                cpu.write_mem(addr, buf).expect("Input writing failed")
+            });
         }
-
+        if let Some(true) = self.mailbox {
+            write_mailbox_value(
+                cpu,
+                target_buf
+                    .read_u32::<LittleEndian>()
+                    .expect("Not enough bytes for mailbox"),
+                target_buf
+                    .read_u32::<LittleEndian>()
+                    .expect("Not enough bytes for ptr_lower"),
+                target_buf
+                    .read_u32::<LittleEndian>()
+                    .expect("Not enough bytes for ptr_higher"),
+            )
+            .expect("Failed to write to mailbox");
+        }
+        qemu.flush_jit();
         assert!(target_buf.is_empty());
-    }
-}
-
-extern "C" {
-    fn aspfuzz_write_smn_flash(addr: GuestAddr, len: i32, buf: *mut u8);
-    fn aspfuzz_x86_write(addr: GuestAddr, buf: *mut u8, len: i32) -> i32;
-}
-/// # Safety
-/// This function should only be called if QEMU has been fully initialized
-/// and the flash memory is accessible
-pub unsafe fn write_flash_mem(addr: GuestAddr, buf: &[u8]) {
-    aspfuzz_write_smn_flash(addr, buf.len() as i32, buf.as_ptr() as *mut u8);
-}
-/// Provide the CPU as proof that QEMU has been initialized and is halted
-pub fn write_x86_mem(_cpu: &CPU, addr: GuestAddr, buf: &[u8]) -> Result<(), Error> {
-    let i;
-    unsafe {
-        i = aspfuzz_x86_write(addr, buf.as_ptr() as *mut u8, buf.len() as i32);
-    }
-    if i == 0 {
-        Ok(())
-    } else {
-        Err(Error::illegal_state("Failed to write to x86 memory"))
     }
 }

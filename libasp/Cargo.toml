@@ -18,3 +18,4 @@ serde_yaml = "*"
 yaml-rust = "0.4.5"
 log = "0.4.22"
 strum = { version = "0.26", features = ["derive"] }
+byteorder = "1.5.0"

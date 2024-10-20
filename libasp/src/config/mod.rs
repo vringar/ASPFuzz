@@ -153,7 +153,7 @@ impl YAMLConfig {
         tuple_list!(
             LibAspModule::new(self.clone()),
             CrashModule::new(self.crashes.clone()),
-            ExceptionModule::new()
+            ExceptionModule::new(),
         )
     }
 }

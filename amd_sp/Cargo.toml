@@ -16,6 +16,7 @@ performance = []
 libafl = { workspace = true}
 libafl_qemu = { workspace = true }
 libafl_bolts = { workspace = true}
+libafl_targets = { workspace = true }
 
 libasp = { path = "../libasp" }
 

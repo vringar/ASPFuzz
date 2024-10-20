@@ -73,8 +73,7 @@ impl<EM, I, OT, S> Feedback<EM, I, OT, S> for CustomMetadataFeedback {
         _observers: &OT,
         _exit_kind: &ExitKind,
     ) -> Result<bool, Error> {
-        log::info!("CustomMetadataFeedback=True");
-        Ok(true)
+        Ok(false)
     }
 
     fn append_metadata(

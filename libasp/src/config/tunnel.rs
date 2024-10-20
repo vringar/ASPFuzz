@@ -35,6 +35,10 @@ pub enum CmpAction {
         target: GuestAddr,
         value: Vec<u8>,
     },
+    LogMemory {
+        target: GuestAddr,
+        size: usize,
+    },
 }
 #[derive(Clone, Deserialize, Debug)]
 pub struct TunnelActions {
@@ -100,7 +104,9 @@ impl TunnelConfig {
                             log::debug!("Tunnel - Jump [{:#x},{:#x}, {:#x}]", addr, source, target);
                             let inst: [u8; 2] = generate_branch_call(source, target);
                             // Patch the instruction by overwriting it
-                            unsafe { hks.qemu().write_mem(source, &inst) }
+                            hks.qemu()
+                                .write_mem(source, &inst)
+                                .expect("Overwriting instruction failed");
                             hks.qemu().flush_jit();
                         },
                     )),
@@ -129,7 +135,31 @@ impl TunnelConfig {
                                 memory_addr,
                                 value
                             );
-                            unsafe { hks.qemu().write_mem(memory_addr, &value) };
+                            hks.qemu()
+                                .write_mem(memory_addr, &value)
+                                .expect("WriteMem failed");
+                        },
+                    )),
+                    false,
+                ),
+                CmpAction::LogMemory {
+                    target: memory_addr,
+                    size,
+                } => emu_modules.instructions(
+                    addr,
+                    Hook::Closure(Box::new(
+                        move |hks: &mut EmulatorModules<ET, S>, _state, _pc| {
+                            let mut buf = vec![0_u8; size];
+                            hks.qemu()
+                                .read_mem(memory_addr, &mut buf)
+                                .expect("ReadMem failed");
+
+                            log::debug!(
+                                "Tunnel - LogMemory [{:#x}, {:#x}, {:02x?}]",
+                                addr,
+                                memory_addr,
+                                buf
+                            );
                         },
                     )),
                     false,

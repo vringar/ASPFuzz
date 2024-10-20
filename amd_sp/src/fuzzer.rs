@@ -34,15 +34,11 @@ use libafl_bolts::{
 };
 use libafl_qemu::{
     executor::QemuExecutor,
-    modules::{
-        edges::{
-            edges_map_mut_ptr, StdEdgeCoverageModuleBuilder, EDGES_MAP_SIZE_IN_USE, MAX_EDGES_FOUND,
-        },
-        DrCovModule, EmulatorModule, StdAddressFilter,
-    },
+    modules::{edges::StdEdgeCoverageModuleBuilder, DrCovModule, EmulatorModule, StdAddressFilter},
     Emulator, QemuExitError, QemuExitReason, QemuShutdownCause, Regs,
 };
 
+use libafl_targets::{edges_map_mut_ptr, EDGES_MAP_DEFAULT_SIZE, MAX_EDGES_FOUND};
 use libasp::config::get_run_conf;
 use rangemap::RangeMap;
 
@@ -104,10 +100,23 @@ pub fn fuzz() -> Result<(), Error> {
             .filter(filter)
             .full_trace(false)
             .build();
+        // Create an observation channel using the coverage map
+        let mut edges_observer = unsafe {
+            HitcountsMapObserver::new(VariableMapObserver::from_mut_slice(
+                "edges",
+                OwnedMutSlice::from_raw_parts_mut(edges_map_mut_ptr(), EDGES_MAP_DEFAULT_SIZE),
+                addr_of_mut!(MAX_EDGES_FOUND),
+            ))
+            .track_indices()
+        };
         let emulator_modules = conf
             .yaml_config
             .get_emulator_modules::<MyState>()
-            .prepend(StdEdgeCoverageModuleBuilder::default().build())
+            .prepend(
+                StdEdgeCoverageModuleBuilder::default()
+                    .map_observer(edges_observer.as_mut())
+                    .build()?,
+            )
             .prepend(dr_cov_module);
         let args = args.as_ref();
         let emulator = Emulator::empty()
@@ -201,16 +210,6 @@ pub fn fuzz() -> Result<(), Error> {
                 log::error!("Harness done with exit code {ret:?}");
                 ret
             }
-        };
-
-        // Create an observation channel using the coverage map
-        let edges_observer = unsafe {
-            HitcountsMapObserver::new(VariableMapObserver::from_mut_slice(
-                "edges",
-                OwnedMutSlice::from_raw_parts_mut(edges_map_mut_ptr(), EDGES_MAP_SIZE_IN_USE),
-                addr_of_mut!(MAX_EDGES_FOUND),
-            ))
-            .track_indices()
         };
 
         // Create an observation channel to keep track of the execution time
