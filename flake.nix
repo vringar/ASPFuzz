@@ -39,8 +39,8 @@
         ];
         pkgs = import nixpkgs {inherit overlays system;};
         llvm = pkgs.llvmPackages_19;
-        python = pkgs.python312;
-        python_pkgs = pkgs.python312Packages;
+        python = pkgs.python3;
+        python_pkgs = pkgs.python3Packages;
         # Things needed to build the software
         nativeBuildInputs = with pkgs; [
           rustToolchain
