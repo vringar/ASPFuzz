@@ -1,15 +1,19 @@
-pub mod tunnel;
 use libafl::inputs::UsesInput;
 use libafl_bolts::tuples::{tuple_list, tuple_list_type};
+
+pub mod tunnel;
 use tunnel::TunnelConfig;
 
 pub mod input;
 use input::InputConfig;
 
 pub mod crash;
+use crash::{CrashConfig, CrashModule};
+
+pub mod write_catcher;
+
 use crate::reset_state::ResetLevel;
 use crate::{ExceptionModule, LibAspModule};
-use crash::{CrashConfig, CrashModule};
 /// Parsing the YAML config file
 use libafl_qemu::*;
 use serde::Deserialize;
@@ -52,7 +56,7 @@ impl ZenVersion {
         }
     }
     /// This function returns a list of possible addresses that jumps into the on-chip BL
-    /// This is used to update the `on_chip_bl_path` in the `QemuConf`
+    /// This could be used in future work to update the `ExceptionHandler` address
     pub fn get_last_off_chip_bl_instruction(&self) -> Vec<GuestAddr> {
         match self {
             ZenVersion::Zen2 => vec![0xffff24f8],
@@ -61,7 +65,7 @@ impl ZenVersion {
     }
 
     /// This function returns a list of possible addresses that jumps into the on-chip BL
-    /// This is used to update the `on_chip_bl_path` in the `QemuConf`
+    /// This could be used in future work to update the `ExceptionHandler` address
     pub fn get_last_on_chip_bl_instruction(&self) -> Vec<GuestAddr> {
         match self {
             ZenVersion::Zen2 => vec![0x450],
@@ -155,6 +159,9 @@ impl YAMLConfig {
             CrashModule::new(self.crashes.clone()),
             ExceptionModule::new(),
         )
+    }
+    pub fn get_tunnels(&self) -> &TunnelConfig {
+        &self.tunnels
     }
 }
 

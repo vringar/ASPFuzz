@@ -1,9 +1,10 @@
+//! Generating metadata whenever a test-case is an objective
+//! Saves all register values
 use std::borrow::Cow;
 
 use libafl::prelude::*;
 use libafl_bolts::{impl_serdeany, Named};
-/// Generating metadata whenever a test-case is an objective
-/// Saves all register values
+
 use libafl_qemu::*;
 
 use log;

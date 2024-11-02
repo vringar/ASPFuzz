@@ -102,6 +102,9 @@ crashes:
     ccp_memcopy_addr: 0x0
     forbidden_memcopies:
     forbidden_writes:
+  x86:
+    start: 0xfffd00000000
+    end: 0xffffffffffff
 
 # Snapshotting behaviour:
 # - Use enum for "default", "on_crash", "periodically":

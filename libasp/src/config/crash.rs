@@ -13,6 +13,8 @@ use libafl_qemu::{
 };
 use serde::Deserialize;
 
+use super::write_catcher::WriteCatcherConfig;
+
 #[derive(Clone, Deserialize, Debug)]
 pub struct NoExecConfig {
     begin: GuestAddr,
@@ -32,7 +34,7 @@ pub struct ForbiddenWritesConfig {
 pub struct MmapConfig {
     no_exec: Vec<NoExecConfig>,
     ccp_memcopy_addr: GuestAddr,
-    //
+    /// A list of addresses memcopy is not allowed to write to
     forbidden_memcopies: Vec<ForbiddenWritesConfig>,
     forbidden_writes: Vec<ForbiddenWritesConfig>,
 }
@@ -41,8 +43,12 @@ pub struct MmapConfig {
 pub struct CrashConfig {
     breakpoints: Vec<GuestAddr>,
     mmap: MmapConfig,
+    pub x86: Option<WriteCatcherConfig>,
 }
 
+/// This can't be actual metadata because we are setting it
+/// in `init_module` and we can't access the state in the hooks
+/// so we need to store it in the module
 #[derive(Debug, Default)]
 struct CrashMetadata {
     counter_write_hooks: u64,
@@ -161,45 +167,45 @@ where
         .modules()
         .match_first_type()
         .expect("This should only run with a FlashHookConfig");
-    if module.meta.flash_read_hook_id == id {
-        let cpu = emu.current_cpu().unwrap();
-        let pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
-        log::debug!("Flash read fn id was hit");
-        if pc as GuestAddr == module.c.mmap.ccp_memcopy_addr {
-            let cpy_src: GuestAddr =
-                cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::R0).unwrap() as GuestAddr;
-            let cpy_dest_start: GuestAddr =
-                cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::R1).unwrap() as GuestAddr;
-            let cpy_len: GuestAddr =
-                cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::R2).unwrap() as GuestAddr;
-            let cpy_dest_end: GuestAddr = cpy_dest_start + cpy_len;
-            log::debug!(
-                "Flash read fn from {:#010x} to {:#010x} for {:#x} bytes",
-                cpy_src,
-                cpy_dest_start,
-                cpy_len
-            );
-            for area in &module.c.mmap.forbidden_memcopies {
-                if (area.begin >= cpy_dest_start && area.begin < cpy_dest_end)
-                    || (area.end >= cpy_dest_start && area.end < cpy_dest_end)
-                {
-                    log::debug!(
-                        "Flash read fn writes to [{:#010x}, {:#010x}]",
-                        area.begin,
-                        area.end
-                    );
-                    let cpy_lr: GuestAddr =
-                        cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::Lr).unwrap() as GuestAddr;
-                    log::debug!("Flash read fn called from {:#010x}", cpy_lr);
-                    if !area.no_hook.contains(&cpy_lr) {
-                        log::info!("Flash read fn hook triggered!");
-                        cpu.trigger_breakpoint();
-                    }
-                }
-            }
-        }
+    if !module.meta.flash_read_hook_id == id {
         return;
     }
+    let cpu = emu.current_cpu().unwrap();
+    let pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
+    log::debug!("Flash read fn id was hit");
+    if pc as GuestAddr != module.c.mmap.ccp_memcopy_addr {
+        return;
+    }
+    let cpy_src: GuestAddr = cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::R0).unwrap() as GuestAddr;
+    let cpy_dest_start: GuestAddr =
+        cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::R1).unwrap() as GuestAddr;
+    let cpy_len: GuestAddr = cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::R2).unwrap() as GuestAddr;
+    let cpy_dest_end: GuestAddr = cpy_dest_start + cpy_len;
+    log::debug!(
+        "Flash read fn from {:#010x} to {:#010x} for {:#x} bytes",
+        cpy_src,
+        cpy_dest_start,
+        cpy_len
+    );
+    for area in &module.c.mmap.forbidden_memcopies {
+        if (area.begin >= cpy_dest_start && area.begin < cpy_dest_end)
+            || (area.end >= cpy_dest_start && area.end < cpy_dest_end)
+        {
+            log::debug!(
+                "Flash read fn writes to [{:#010x}, {:#010x}]",
+                area.begin,
+                area.end
+            );
+            let cpy_lr: GuestAddr =
+                cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::Lr).unwrap() as GuestAddr;
+            log::debug!("Flash read fn called from {:#010x}", cpy_lr);
+            if !area.no_hook.contains(&cpy_lr) {
+                log::info!("Flash read fn hook triggered!");
+                cpu.trigger_breakpoint();
+            }
+        }
+    }
+
     log::debug!("Execute block:");
     log::debug!("> id: {}", id);
     // log::debug!("> data: {}", (todo!() as u32));

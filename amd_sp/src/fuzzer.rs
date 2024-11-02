@@ -39,7 +39,13 @@ use libafl_qemu::{
 };
 
 use libafl_targets::{edges_map_mut_ptr, EDGES_MAP_DEFAULT_SIZE, MAX_EDGES_FOUND};
-use libasp::config::get_run_conf;
+use libasp::{
+    config::{
+        get_run_conf,
+        write_catcher::{WriteCatcherFeedback, WriteCatcherObserver},
+    },
+    CustomMetadataFeedback,
+};
 use rangemap::RangeMap;
 
 fn setup_directory_structure(
@@ -156,7 +162,6 @@ pub fn fuzz() -> Result<(), Error> {
                            _state: &mut MyState,
                            input: &BytesInput| {
             log::error!("Starting harness");
-
             let dr_cov_module = emulator
                 .modules_mut()
                 .get_mut::<DrCovModule<StdAddressFilter>>()
@@ -214,6 +219,8 @@ pub fn fuzz() -> Result<(), Error> {
 
         // Create an observation channel to keep track of the execution time
         let time_observer = TimeObserver::new("time");
+        let write_catcher_observer =
+            WriteCatcherObserver::new(conf.yaml_config.crashes.x86.clone());
 
         // Feedback to rate the interestingness of an input
         // This one is composed by two Feedbacks in OR
@@ -225,7 +232,13 @@ pub fn fuzz() -> Result<(), Error> {
         );
 
         // A feedback to choose if an input is a solution or not
-        let mut objective = feedback_or_fast!(CrashFeedback::new());
+        let mut objective = feedback_or_fast!(
+            feedback_or_fast!(
+                CrashFeedback::new(),
+                WriteCatcherFeedback::new(&write_catcher_observer)
+            ),
+            CustomMetadataFeedback::new(qemu)
+        ); // Always false but adds metadata to the output
 
         // If not restarting, create a State from scratch
         let mut state: MyState = state.unwrap_or_else(|| {
@@ -258,7 +271,7 @@ pub fn fuzz() -> Result<(), Error> {
         let mut executor = QemuExecutor::new(
             emulator,
             &mut harness,
-            tuple_list!(edges_observer, time_observer),
+            tuple_list!(edges_observer, time_observer, write_catcher_observer),
             &mut fuzzer,
             &mut state,
             &mut mgr,
@@ -288,9 +301,7 @@ pub fn fuzz() -> Result<(), Error> {
         let mutator = StdScheduledMutator::new(havoc_mutations());
         let mut stages = tuple_list!(StdMutationalStage::new(mutator));
 
-        fuzzer
-            .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
-            .unwrap();
+        fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;
         Ok(())
     };
 
