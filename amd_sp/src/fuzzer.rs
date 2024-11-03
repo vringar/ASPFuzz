@@ -172,9 +172,10 @@ pub fn fuzz() -> Result<(), Error> {
 
                 // If the execution stops at any point other than the designated breakpoint (e.g. a breakpoint on a panic method) we consider it a crash
                 let pc: u32 = qemu.cpu_from_index(0).read_reg(Regs::Pc).unwrap();
-                let ret = match &conf.yaml_config.harness.sinks.iter().find(|&&s| s == pc) {
-                    Some(_) => ExitKind::Ok,
-                    None => ExitKind::Crash,
+                let ret = if conf.yaml_config.harness.sinks.contains(&pc) {
+                    ExitKind::Ok
+                } else {
+                    ExitKind::Crash
                 };
 
                 // OPTION 1: restore only the CPU state (registers et. al)
