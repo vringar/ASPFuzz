@@ -10,7 +10,6 @@ use serde::{
 
 #[derive(Clone, Deserialize, Debug)]
 #[serde(tag = "action")]
-
 pub enum CmpAction {
     CopyRegister {
         #[serde(deserialize_with = "parse_regs")]
@@ -189,7 +188,7 @@ where
 {
     struct RegisterVisitor;
     const VALUES: &[&str] = &["A valid Register name"];
-    impl<'de> Visitor<'de> for RegisterVisitor {
+    impl Visitor<'_> for RegisterVisitor {
         type Value = Regs;
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

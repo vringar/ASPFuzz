@@ -160,9 +160,6 @@ impl YAMLConfig {
             ExceptionModule::new(),
         )
     }
-    pub fn get_tunnels(&self) -> &TunnelConfig {
-        &self.tunnels
-    }
 }
 
 #[cfg(test)]

@@ -108,7 +108,7 @@ impl InputConfig {
         self.flash.as_ref().map(|i| i.size()).unwrap_or(0)
             + self.x86.as_ref().map(|i| i.size()).unwrap_or(0)
             + self.psp.as_ref().map(|i| i.size()).unwrap_or(0)
-            + if self.mailbox.unwrap_or(false) { 12 } else { 0 }
+            + if self.has_mailbox() { 12 } else { 0 }
     }
 }
 
@@ -203,5 +203,9 @@ impl InputConfig {
         }
         qemu.flush_jit();
         assert!(target_buf.is_empty());
+    }
+
+    pub fn has_mailbox(&self) -> bool {
+        self.mailbox.unwrap_or(false)
     }
 }

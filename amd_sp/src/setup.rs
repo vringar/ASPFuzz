@@ -3,7 +3,11 @@ use clap::{command, Parser};
 
 use libasp::config::{borrow_global_conf, init_global_conf};
 
-use std::{env, path::PathBuf, process::exit};
+use std::{
+    env, fs, io,
+    path::{Path, PathBuf},
+    process::exit,
+};
 
 /// Fuzzing the on-chip-bootloader from different AMD Zen generations.
 #[derive(Parser, Debug)]
@@ -20,6 +24,31 @@ struct Args {
     /// Number of cores
     #[arg(short, long)]
     num_cores: Option<u32>,
+}
+
+pub fn setup_directory_structure(
+    run_dir: &PathBuf,
+    original_path: &Path,
+) -> Result<(PathBuf, PathBuf, PathBuf), io::Error> {
+    if run_dir.exists() {
+        fs::remove_dir_all(run_dir)?;
+    }
+    fs::create_dir_all(run_dir)?;
+    let mut input_dir = run_dir.clone();
+    input_dir.push("inputs");
+    fs::create_dir_all(&input_dir)?;
+    let mut log_dir = run_dir.clone();
+    log_dir.push("logs");
+    fs::create_dir_all(&log_dir)?;
+    let mut solutions_dir = run_dir.clone();
+    solutions_dir.push("solutions");
+    fs::create_dir_all(&solutions_dir)?;
+    let mut config_path = run_dir.clone();
+    config_path.push("config.yaml");
+
+    fs::copy(original_path, &config_path)?;
+
+    Ok((input_dir, log_dir, solutions_dir))
 }
 
 pub fn parse_args() -> Vec<String> {

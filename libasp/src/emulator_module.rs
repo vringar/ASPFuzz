@@ -1,7 +1,7 @@
 use std::ptr::addr_of_mut;
 
-use crate::config::YAMLConfig;
-use libafl::inputs::UsesInput;
+use crate::{config::YAMLConfig, read_mailbox_value, MailboxValues};
+use libafl::{inputs::UsesInput, HasMetadata};
 use libafl_qemu::{
     modules::{
         EmulatorModule, EmulatorModuleTuple, NopAddressFilter, NopPageFilter, NOP_ADDRESS_FILTER,
@@ -25,14 +25,16 @@ impl LibAspModule {
         LibAspModule { config: conf }
     }
 }
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 
-struct MiscMetadata {}
+pub struct MiscMetadata {
+    mailbox_values: MailboxValues,
+}
 libafl_bolts::impl_serdeany!(MiscMetadata);
 
 impl<S> EmulatorModule<S> for LibAspModule
 where
-    S: UsesInput + Unpin,
+    S: UsesInput + Unpin + HasMetadata,
 {
     type ModuleAddressFilter = NopAddressFilter;
 
@@ -62,10 +64,22 @@ where
         self.config.tunnels.setup(modules);
     }
 
-    fn first_exec<ET>(&mut self, _emulator_modules: &mut EmulatorModules<ET, S>, _state: &mut S)
-    where
+    fn post_exec<OT, ET>(
+        &mut self,
+        emulator_modules: &mut EmulatorModules<ET, S>,
+        state: &mut S,
+        _input: &<S as UsesInput>::Input,
+        _observers: &mut OT,
+        _exit_kind: &mut libafl::prelude::ExitKind,
+    ) where
+        OT: libafl::prelude::ObserversTuple<<S as UsesInput>::Input, S>,
         ET: EmulatorModuleTuple<S>,
     {
-        // We've hit the initial breakpoint
+        if self.config.input.has_mailbox() {
+            state.add_metadata(MiscMetadata {
+                mailbox_values: read_mailbox_value(&emulator_modules.qemu().cpu_from_index(0))
+                    .expect("Failed to read mailbox"),
+            });
+        }
     }
 }

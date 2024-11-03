@@ -10,32 +10,34 @@ use libafl_qemu::*;
 use log;
 use serde::{Deserialize, Serialize};
 
+use crate::MiscMetadata;
+
 /// A custom testcase metadata
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CustomMetadata {
-    pub r0: String,
-    pub r1: String,
-    pub r2: String,
-    pub r3: String,
-    pub r4: String,
-    pub r5: String,
-    pub r6: String,
-    pub r7: String,
-    pub r8: String,
-    pub r9: String,
-    pub r10: String,
-    pub r11: String,
-    pub r12: String,
-    pub sp: String,
-    pub pc: String,
-    pub lr: String,
-    pub cpsr: String,
+pub struct RegisterMetadata {
+    r0: String,
+    r1: String,
+    r2: String,
+    r3: String,
+    r4: String,
+    r5: String,
+    r6: String,
+    r7: String,
+    r8: String,
+    r9: String,
+    r10: String,
+    r11: String,
+    r12: String,
+    sp: String,
+    pc: String,
+    lr: String,
+    cpsr: String,
 }
 
-impl_serdeany!(CustomMetadata);
+impl_serdeany!(RegisterMetadata);
 
-impl CustomMetadata {
-    /// Creates a new [`struct@CustomMetadata`]
+impl RegisterMetadata {
+    /// Creates a new [`RegisterMetadata`]
     #[must_use]
     pub fn new(regs: Vec<u64>) -> Self {
         Self {
@@ -65,7 +67,10 @@ pub struct CustomMetadataFeedback {
     emulator: Qemu,
 }
 impl<S> StateInitializer<S> for CustomMetadataFeedback {}
-impl<EM, I, OT, S> Feedback<EM, I, OT, S> for CustomMetadataFeedback {
+impl<EM, I, OT, S> Feedback<EM, I, OT, S> for CustomMetadataFeedback
+where
+    S: HasMetadata,
+{
     fn is_interesting(
         &mut self,
         _state: &mut S,
@@ -79,7 +84,7 @@ impl<EM, I, OT, S> Feedback<EM, I, OT, S> for CustomMetadataFeedback {
 
     fn append_metadata(
         &mut self,
-        _state: &mut S,
+        state: &mut S,
         _em: &mut EM,
         _ot: &OT,
         testcase: &mut Testcase<I>,
@@ -90,7 +95,10 @@ impl<EM, I, OT, S> Feedback<EM, I, OT, S> for CustomMetadataFeedback {
         for r in Regs::iter() {
             regs.push(self.emulator.cpu_from_index(0).read_reg(r).unwrap());
         }
-        testcase.add_metadata(CustomMetadata::new(regs));
+        testcase.add_metadata(RegisterMetadata::new(regs));
+        if let Ok(mbox_values) = state.metadata::<MiscMetadata>() {
+            testcase.add_metadata(mbox_values.clone());
+        }
         Ok(())
     }
 }

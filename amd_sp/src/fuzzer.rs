@@ -1,15 +1,11 @@
 //! A fuzzer using qemu in systemmode for binary-only coverage of kernels
 //!
 use core::{ptr::addr_of_mut, time::Duration};
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-    process,
-};
+use std::{ops::Deref, process};
 
-use crate::{harness::MyState, setup::parse_args};
+use crate::setup::{parse_args, setup_directory_structure};
 use libafl::{
-    corpus::{Corpus, InMemoryCorpus, OnDiskCorpus},
+    corpus::{CachedOnDiskCorpus, Corpus, OnDiskCorpus},
     events::{launcher::Launcher, EventConfig},
     executors::ExitKind,
     feedback_or, feedback_or_fast,
@@ -28,7 +24,7 @@ use libafl_bolts::{
     current_nanos,
     ownedref::OwnedMutSlice,
     prelude::Cores,
-    rands::StdRand,
+    rands::{RomuDuoJrRand, StdRand},
     shmem::{ShMemProvider, StdShMemProvider},
     tuples::{tuple_list, Prepend},
 };
@@ -48,30 +44,9 @@ use libasp::{
 };
 use rangemap::RangeMap;
 
-fn setup_directory_structure(
-    run_dir: &PathBuf,
-    original_path: &Path,
-) -> Result<(PathBuf, PathBuf, PathBuf), io::Error> {
-    if run_dir.exists() {
-        fs::remove_dir_all(run_dir)?;
-    }
-    fs::create_dir_all(run_dir)?;
-    let mut input_dir = run_dir.clone();
-    input_dir.push("inputs");
-    fs::create_dir_all(&input_dir)?;
-    let mut log_dir = run_dir.clone();
-    log_dir.push("logs");
-    fs::create_dir_all(&log_dir)?;
-    let mut solutions_dir = run_dir.clone();
-    solutions_dir.push("solutions");
-    fs::create_dir_all(&solutions_dir)?;
-    let mut config_path = run_dir.clone();
-    config_path.push("config.yaml");
+pub type MyState =
+    StdState<BytesInput, CachedOnDiskCorpus<BytesInput>, RomuDuoJrRand, OnDiskCorpus<BytesInput>>;
 
-    fs::copy(original_path, &config_path)?;
-
-    Ok((input_dir, log_dir, solutions_dir))
-}
 pub fn fuzz() -> Result<(), Error> {
     env_logger::init();
     let args = Box::new(parse_args());
@@ -219,6 +194,7 @@ pub fn fuzz() -> Result<(), Error> {
 
         // Create an observation channel to keep track of the execution time
         let time_observer = TimeObserver::new("time");
+        let time_feedback = TimeFeedback::new(&time_observer);
         let write_catcher_observer =
             WriteCatcherObserver::new(conf.yaml_config.crashes.x86.clone());
 
@@ -228,7 +204,7 @@ pub fn fuzz() -> Result<(), Error> {
             // New maximization map feedback linked to the edges observer and the feedback state
             MaxMapFeedback::new(&edges_observer),
             // Time feedback, this one does not need a feedback state
-            TimeFeedback::new(&time_observer),
+            time_feedback.clone()
         );
 
         // A feedback to choose if an input is a solution or not
@@ -237,7 +213,7 @@ pub fn fuzz() -> Result<(), Error> {
                 CrashFeedback::new(),
                 WriteCatcherFeedback::new(&write_catcher_observer)
             ),
-            CustomMetadataFeedback::new(qemu)
+            feedback_or!(CustomMetadataFeedback::new(qemu), time_feedback)
         ); // Always false but adds metadata to the output
 
         // If not restarting, create a State from scratch
@@ -246,7 +222,7 @@ pub fn fuzz() -> Result<(), Error> {
                 // RNG
                 StdRand::with_seed(current_nanos()),
                 // Corpus that will be evolved, we keep it in memory for performance
-                InMemoryCorpus::new(),
+                CachedOnDiskCorpus::new(input_dir.deref(), 1000).unwrap(),
                 // Corpus in which we store solutions (crashes in this example),
                 // on disk so the user can get them after stopping the fuzzer
                 OnDiskCorpus::new(solutions_dir.clone()).unwrap(),

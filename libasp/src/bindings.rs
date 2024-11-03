@@ -65,16 +65,23 @@ pub fn write_mailbox_value(
         Err(Error::illegal_state("Failed to update mailbox"))
     }
 }
-pub fn read_mailbox_value(_cpu: &CPU) -> Result<[u32; 3], Error> {
-    let mut mbox: u32 = 0;
-    let mut ptr_lower: u32 = 0;
-    let mut ptr_higher: u32 = 0;
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct MailboxValues {
+    pub mbox: u32,
+    pub ptr_lower: u32,
+    pub ptr_higher: u32,
+}
+impl_serdeany!(MailboxValues);
+
+pub fn read_mailbox_value(_cpu: &CPU) -> Result<MailboxValues, Error> {
+    let mut mbox = MailboxValues::default();
     let rc;
     unsafe {
-        rc = read_mailbox(&mut mbox, &mut ptr_lower, &mut ptr_higher);
+        rc = read_mailbox(&mut mbox.mbox, &mut mbox.ptr_lower, &mut mbox.ptr_lower);
     }
     if rc == 0 {
-        Ok([mbox, ptr_lower, ptr_higher])
+        Ok(mbox)
     } else {
         Err(Error::illegal_state("Failed to read mailbox"))
     }
