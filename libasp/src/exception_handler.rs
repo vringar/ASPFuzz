@@ -83,7 +83,7 @@ impl ExceptionModule {
                         let emu = hks.qemu();
                         let sp: u32 = emu.read_reg(Regs::Sp).unwrap();
                         let lr: u32 = emu.read_reg(Regs::Lr).unwrap();
-                        log::debug!("Exception:{enum_value:?} sp: {sp:#x} lr: {lr:#x}");
+                        log::info!("Exception:{enum_value:?} sp: {sp:#x} lr: {lr:#x}");
                         emu.current_cpu().unwrap().trigger_breakpoint();
                     },
                 )),
@@ -199,7 +199,7 @@ where
         self.update_exception_vector_base(emulator_modules)
     }
 }
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 
 struct ExceptionHandlerMetadata {
     triggered_exception: Option<ExceptionType>,
@@ -230,6 +230,22 @@ where
         } else {
             Ok(false)
         }
+    }
+
+    fn append_metadata(
+        &mut self,
+        state: &mut S,
+        _manager: &mut EM,
+        _observers: &OT,
+        testcase: &mut Testcase<I>,
+    ) -> Result<(), Error> {
+        let meta: Option<&ExceptionHandlerMetadata> = state.metadata_map_mut().get();
+        if let Some(meta) = meta {
+            if meta.triggered_exception.is_some() {
+                testcase.add_metadata(meta.clone());
+            }
+        }
+        Ok(())
     }
 }
 

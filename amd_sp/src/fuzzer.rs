@@ -40,7 +40,7 @@ use libasp::{
         get_run_conf,
         write_catcher::{WriteCatcherFeedback, WriteCatcherObserver},
     },
-    CustomMetadataFeedback,
+    CustomMetadataFeedback, ExceptionFeedback,
 };
 use rangemap::RangeMap;
 
@@ -175,6 +175,7 @@ pub fn fuzz() -> Result<(), Error> {
                 let ret = if conf.yaml_config.harness.sinks.contains(&pc) {
                     ExitKind::Ok
                 } else {
+                    log::error!("Unexpected exit at PC: {:#x}", pc);
                     ExitKind::Crash
                 };
 
@@ -212,7 +213,8 @@ pub fn fuzz() -> Result<(), Error> {
         let mut objective = feedback_or_fast!(
             feedback_or_fast!(
                 CrashFeedback::new(),
-                WriteCatcherFeedback::new(&write_catcher_observer)
+                WriteCatcherFeedback::new(&write_catcher_observer),
+                ExceptionFeedback::default()
             ),
             feedback_or!(CustomMetadataFeedback::new(qemu), time_feedback)
         ); // Always false but adds metadata to the output

@@ -43,7 +43,7 @@ mac_alias = "test_unix"
 windows_alias = "unsupported"
 
 [tasks.test_unix]
-env = { "RUST_LOG" = "debug" }
+env = { "RUST_LOG" = "info" }
 command = "cargo"
 args = [
     "run", "--release",
