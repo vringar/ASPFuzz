@@ -50,7 +50,7 @@ pub struct CrashConfig {
 /// in `init_module` and we can't access the state in the hooks
 /// so we need to store it in the module
 #[derive(Debug, Default)]
-struct CrashMetadata {
+struct CrashRuntimeConfig {
     counter_write_hooks: u64,
     counter_edge_hooks: u64,
     ccp_memcopy_id: u64,
@@ -59,14 +59,14 @@ struct CrashMetadata {
 #[derive(Debug)]
 pub struct CrashModule {
     c: CrashConfig,
-    meta: CrashMetadata,
+    r: CrashRuntimeConfig,
 }
 
 impl CrashModule {
     pub fn new(conf: CrashConfig) -> Self {
         CrashModule {
             c: conf,
-            meta: CrashMetadata::default(),
+            r: CrashRuntimeConfig::default(),
         }
     }
 }
@@ -137,9 +137,9 @@ where
         .modules_mut()
         .match_first_type_mut()
         .expect("This should only run with a FlashHookConfig");
-    let meta = &mut module.meta;
-    let id = meta.counter_edge_hooks;
-    meta.counter_edge_hooks += 1;
+    let runtime_config = &mut module.r;
+    let id = runtime_config.counter_edge_hooks;
+    runtime_config.counter_edge_hooks += 1;
     for no_exec in module.c.mmap.no_exec.iter() {
         if src >= no_exec.begin && src < no_exec.end {
             log::debug!("Generate block:");
@@ -152,7 +152,7 @@ where
 
     if !module.c.mmap.forbidden_memcopies.is_empty() && module.c.mmap.ccp_memcopy_addr == src {
         log::debug!("Adding block hook for ccp_memcopy_addr");
-        meta.ccp_memcopy_id = id;
+        runtime_config.ccp_memcopy_id = id;
         return Some(id);
     }
     None
@@ -167,7 +167,7 @@ where
         .modules()
         .match_first_type()
         .expect("This should only run with a FlashHookConfig");
-    if !module.meta.ccp_memcopy_id == id {
+    if !module.r.ccp_memcopy_id == id {
         log::debug!("Execute block: id: {id}");
         // log::debug!("> data: {}", (todo!() as u32));
         emu.current_cpu().unwrap().trigger_breakpoint();
@@ -222,7 +222,7 @@ where
         .match_first_type_mut()
         .expect("This should only run with a FlashHookConfig");
 
-    let meta = &mut module.meta;
+    let runtime_conf = &mut module.r;
     // TODO: for known write locations at "compile" time
     // Don't emit hooks if they are outside of range
     for ForbiddenWritesConfig {
@@ -237,8 +237,8 @@ where
         }
     }
     let size = mem_acces_info.size();
-    let hook_id = meta.counter_write_hooks;
-    meta.counter_write_hooks += 1;
+    let hook_id = runtime_conf.counter_write_hooks;
+    runtime_conf.counter_write_hooks += 1;
     log::debug!("Generate writes:  id: {hook_id:#x}  src: {pc:#x} size: {size}");
     Some(hook_id)
 }
