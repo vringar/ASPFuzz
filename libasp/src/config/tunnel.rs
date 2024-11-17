@@ -100,12 +100,17 @@ impl TunnelConfig {
                     addr,
                     Hook::Closure(Box::new(
                         move |hks: &mut EmulatorModules<ET, S>, _state, _pc| {
-                            log::debug!("Tunnel - Jump [{:#x},{:#x}, {:#x}]", addr, source, target);
+                            log::info!("Tunnel - Jump [{:#x},{:#x}, {:#x}]", addr, source, target);
                             let inst: [u8; 2] = generate_branch_call(source, target);
                             // Patch the instruction by overwriting it
                             hks.qemu()
                                 .write_mem(source, &inst)
                                 .expect("Overwriting instruction failed");
+                            // let cpu = hks.qemu().current_cpu().unwrap();
+                            // let pc: u32 = cpu.read_reg(Regs::Pc).unwrap();
+                            // cpu_set_pc(cpu, (target +1).into())
+                            //     .expect("Failed to set PC");
+
                             hks.qemu().flush_jit();
                         },
                     )),
@@ -178,7 +183,11 @@ fn generate_branch_call(cur_pc: u32, target: u32) -> [u8; 2] {
     assert!(diff % 2 == 0);
     let mask = (1i16 << 11) - 1;
     let inst = 0b11100 << 11 | ((diff / 2) & mask);
-    log::debug!("Diff: {:#x} Inst: {:b}", diff, inst);
+    log::info!(
+        "Generating jump instruction diff: {:#x} inst: {:#x}",
+        diff,
+        inst
+    );
     inst.to_le_bytes()
 }
 

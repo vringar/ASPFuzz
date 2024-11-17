@@ -53,7 +53,7 @@ pub struct CrashConfig {
 struct CrashMetadata {
     counter_write_hooks: u64,
     counter_edge_hooks: u64,
-    flash_read_hook_id: u64,
+    ccp_memcopy_id: u64,
 }
 
 #[derive(Debug)]
@@ -152,7 +152,7 @@ where
 
     if !module.c.mmap.forbidden_memcopies.is_empty() && module.c.mmap.ccp_memcopy_addr == src {
         log::debug!("Adding block hook for ccp_memcopy_addr");
-        meta.flash_read_hook_id = id;
+        meta.ccp_memcopy_id = id;
         return Some(id);
     }
     None
@@ -167,15 +167,15 @@ where
         .modules()
         .match_first_type()
         .expect("This should only run with a FlashHookConfig");
-    if !module.meta.flash_read_hook_id == id {
+    if !module.meta.ccp_memcopy_id == id {
+        log::debug!("Execute block: id: {id}");
+        // log::debug!("> data: {}", (todo!() as u32));
+        emu.current_cpu().unwrap().trigger_breakpoint();
         return;
     }
     let cpu = emu.current_cpu().unwrap();
     let pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
-    log::debug!("Flash read fn id was hit");
-    if pc as GuestAddr != module.c.mmap.ccp_memcopy_addr {
-        return;
-    }
+    assert_eq!(pc as GuestAddr, module.c.mmap.ccp_memcopy_addr);
     let cpy_src: GuestAddr = cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::R0).unwrap() as GuestAddr;
     let cpy_dest_start: GuestAddr =
         cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::R1).unwrap() as GuestAddr;
@@ -191,25 +191,19 @@ where
         if (area.begin >= cpy_dest_start && area.begin < cpy_dest_end)
             || (area.end >= cpy_dest_start && area.end < cpy_dest_end)
         {
+            let cpy_lr: GuestAddr =
+                cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::Lr).unwrap() as GuestAddr;
             log::debug!(
-                "Flash read fn writes to [{:#010x}, {:#010x}]",
+                "Flash read fn writes to [{:#010x}, {:#010x}] from function {cpy_lr:#010x}",
                 area.begin,
                 area.end
             );
-            let cpy_lr: GuestAddr =
-                cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::Lr).unwrap() as GuestAddr;
-            log::debug!("Flash read fn called from {:#010x}", cpy_lr);
             if !area.no_hook.contains(&cpy_lr) {
                 log::info!("Flash read fn hook triggered!");
                 cpu.trigger_breakpoint();
             }
         }
     }
-
-    log::debug!("Execute block:");
-    log::debug!("> id: {}", id);
-    // log::debug!("> data: {}", (todo!() as u32));
-    emu.current_cpu().unwrap().trigger_breakpoint();
 }
 
 fn gen_writes_hook<ET, S>(
@@ -243,12 +237,9 @@ where
         }
     }
     let size = mem_acces_info.size();
-    log::debug!("Generate writes:");
-    log::debug!("> src: {:#x}", pc);
-    log::debug!("> size: {}", size);
     let hook_id = meta.counter_write_hooks;
     meta.counter_write_hooks += 1;
-    log::debug!("> id: {:#x}", hook_id);
+    log::debug!("Generate writes:  id: {hook_id:#x}  src: {pc:#x} size: {size}");
     Some(hook_id)
 }
 
@@ -267,9 +258,7 @@ fn exec_writes_hook<ET, S>(
         .expect("This should only run with a FlashHookConfig");
     for &ForbiddenWritesConfig { begin, end, .. } in module.c.mmap.forbidden_writes.iter() {
         if addr >= begin && addr < end {
-            log::debug!("Execute writes:");
-            log::debug!("> id: {:#x}", id);
-            log::debug!("> addr: {:#x}", addr);
+            log::debug!("Execute writes: id: {id:#x} addr: {addr:#x}");
             // log::debug!("> data: {}", todo!() as u64);
             let emu = modules.qemu();
             emu.current_cpu().unwrap().trigger_breakpoint();
@@ -289,10 +278,7 @@ fn exec_writes_hook_n<ET: EmulatorModuleTuple<S>, S: UsesInput>(
         .expect("This should only run with a FlashHookConfig");
     for no_write in module.c.mmap.forbidden_writes.iter() {
         if addr >= no_write.begin && addr < no_write.end {
-            log::debug!("Execute writes:");
-            log::debug!("> id: {:#x}", id);
-            log::debug!("> addr: {:#x}", addr);
-            log::debug!("> size: {}", size);
+            log::debug!("Execute writes: id: {id:#x}, addr: {addr:#x}, size: {size}");
             // log::debug!("> data: {}", (todo!() as u32));
             modules.qemu().current_cpu().unwrap().trigger_breakpoint();
         }

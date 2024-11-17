@@ -4,7 +4,10 @@
 
 use libafl::Error;
 use libafl_bolts::impl_serdeany;
-use libafl_qemu::{sys::hwaddr, GuestAddr, CPU};
+use libafl_qemu::{
+    sys::{hwaddr, vaddr, CPUStatePtr},
+    GuestAddr, CPU,
+};
 use serde::{Deserialize, Serialize};
 
 // These need to be kept in sync with the functions in the emulator repository
@@ -17,8 +20,8 @@ extern "C" {
     fn aspfuzz_write_catcher_reset() -> i32;
     /// This is a little tricky to use because we will always just write back
     /// the value in our current struct, so we need to treat 0 as a special case
-    fn aspfuzz_write_catcher_status(get_read: bool, addr: *mut hwaddr) -> i32;
-
+    fn aspfuzz_write_catcher_status(get_read: bool, addr: *mut hwaddr, pc: *mut vaddr) -> i32;
+    fn set_pc(cpu: CPUStatePtr, new_pc: vaddr) -> i32;
 }
 /// # Safety
 /// This function should only be called if QEMU has been fully initialized
@@ -78,7 +81,7 @@ pub fn read_mailbox_value(_cpu: &CPU) -> Result<MailboxValues, Error> {
     let mut mbox = MailboxValues::default();
     let rc;
     unsafe {
-        rc = read_mailbox(&mut mbox.mbox, &mut mbox.ptr_lower, &mut mbox.ptr_lower);
+        rc = read_mailbox(&mut mbox.mbox, &mut mbox.ptr_lower, &mut mbox.ptr_higher);
     }
     if rc == 0 {
         Ok(mbox)
@@ -86,13 +89,26 @@ pub fn read_mailbox_value(_cpu: &CPU) -> Result<MailboxValues, Error> {
         Err(Error::illegal_state("Failed to read mailbox"))
     }
 }
+
+pub fn cpu_set_pc(cpu: CPU, new_pc: vaddr) -> Result<(), Error> {
+    let rc;
+    unsafe {
+        rc = set_pc(cpu.raw_ptr(), new_pc);
+    }
+    if rc == 0 {
+        Ok(())
+    } else {
+        Err(Error::illegal_state("Failed to set PC"))
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct WriteCatcher {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct WriteCatcherMetadata {
-    pub caught_read: Option<hwaddr>,
-    pub caught_write: Option<hwaddr>,
+    pub caught_read: Option<(hwaddr, vaddr)>,
+    pub caught_write: Option<(hwaddr, vaddr)>,
 }
 
 impl_serdeany!(WriteCatcherMetadata);
@@ -121,18 +137,18 @@ impl WriteCatcher {
     }
 
     pub fn write_catcher_status(&self) -> Result<WriteCatcherMetadata, Error> {
-        let accessor = |is_read: bool| -> Result<Option<_>, Error> {
+        let accessor = |is_read: bool| -> Result<Option<(_, _)>, Error> {
             let mut addr: hwaddr = 0;
-
+            let mut pc = 0;
             let rc;
             unsafe {
-                rc = aspfuzz_write_catcher_status(is_read, &mut addr);
+                rc = aspfuzz_write_catcher_status(is_read, &mut addr, &mut pc);
             }
             if rc != 0 {
                 return Err(Error::illegal_state("Failed to get read catcher status"));
             }
             if addr != 0 {
-                Ok(Some(addr))
+                Ok(Some((addr, pc)))
             } else {
                 Ok(None)
             }

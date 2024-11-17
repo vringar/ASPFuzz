@@ -5,7 +5,7 @@ use libafl_qemu::{
         EmulatorModule, EmulatorModuleTuple, NopAddressFilter, NopPageFilter, NOP_ADDRESS_FILTER,
         NOP_PAGE_FILTER,
     },
-    EmulatorModules, Hook, HookId, InstructionHookId, Regs,
+    EmulatorModules, Hook, HookId, InstructionHookId,
 };
 use strum::{EnumIter, FromRepr, IntoEnumIterator};
 
@@ -14,6 +14,8 @@ use libafl_bolts::Named;
 use log;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ptr::addr_of_mut};
+
+use crate::RegisterMetadata;
 
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug, FromRepr, EnumIter)]
 #[repr(u32)]
@@ -74,17 +76,13 @@ impl ExceptionModule {
                 Hook::Closure(Box::new(
                     move |hks: &mut EmulatorModules<ET, S>, state: Option<&mut S>, _pc| {
                         let state =
-                            state.expect("State should be present when generating block hooks");
-
-                        let meta = state
-                            .metadata_map_mut()
-                            .get_or_insert_with(ExceptionHandlerMetadata::default);
-                        meta.triggered_exception = Some(enum_value);
-                        let emu = hks.qemu();
-                        let sp: u32 = emu.read_reg(Regs::Sp).unwrap();
-                        let lr: u32 = emu.read_reg(Regs::Lr).unwrap();
-                        log::info!("Exception:{enum_value:?} sp: {sp:#x} lr: {lr:#x}");
-                        emu.current_cpu().unwrap().trigger_breakpoint();
+                            state.expect("State should be present when an exception is triggered");
+                        let exception_meta = ExceptionHandlerMetadata {
+                            triggered_exception: enum_value,
+                            registers: RegisterMetadata::new(hks.qemu()),
+                        };
+                        state.metadata_map_mut().insert(exception_meta);
+                        hks.qemu().current_cpu().unwrap().trigger_breakpoint();
                     },
                 )),
                 true,
@@ -198,11 +196,26 @@ where
     {
         self.update_exception_vector_base(emulator_modules)
     }
+
+    fn pre_exec<ET>(
+        &mut self,
+        _emulator_modules: &mut EmulatorModules<ET, S>,
+        state: &mut S,
+        _input: &<S as UsesInput>::Input,
+    ) where
+        ET: EmulatorModuleTuple<S>,
+    {
+        // THIS IS REQUIRED
+        let _ = state
+            .metadata_map_mut()
+            .remove::<ExceptionHandlerMetadata>();
+    }
 }
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 
 struct ExceptionHandlerMetadata {
-    triggered_exception: Option<ExceptionType>,
+    triggered_exception: ExceptionType,
+    registers: RegisterMetadata,
 }
 libafl_bolts::impl_serdeany!(ExceptionHandlerMetadata);
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
@@ -224,9 +237,9 @@ where
         _exit_kind: &ExitKind,
     ) -> Result<bool, Error> {
         let meta: Option<&ExceptionHandlerMetadata> = state.metadata_map_mut().get();
-        if let Some(meta) = meta {
+        if meta.is_some() {
             log::info!("ExceptionFeedback=True");
-            Ok(meta.triggered_exception.is_some())
+            Ok(true)
         } else {
             Ok(false)
         }
@@ -241,9 +254,7 @@ where
     ) -> Result<(), Error> {
         let meta: Option<&ExceptionHandlerMetadata> = state.metadata_map_mut().get();
         if let Some(meta) = meta {
-            if meta.triggered_exception.is_some() {
-                testcase.add_metadata(meta.clone());
-            }
+            testcase.add_metadata(meta.clone());
         }
         Ok(())
     }

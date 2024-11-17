@@ -17,7 +17,7 @@ assert len(sys.argv) == 2, "Please pass an argument"
 # uint32_t:1	ResetRequired	Set by the target to indicate that the host must execute warm reset if FW corruption is detected.
 # uint32_t:1	Recovery	Set by the target to indicate that the host has to execute FW recovery sequence
 # uint32_t:1	CmdOrRspns	Command = 0 (Written by OS); Response = 1 (Written by PSP upon completion)
-class MboxStruct(ctypes.BigEndianStructure):
+class MboxStruct(ctypes.LittleEndianStructure):
     _fields_ = [
         ("CmdOrRspns", ctypes.c_uint32, 1),
         ("Recovery", ctypes.c_uint32, 1),
@@ -135,7 +135,8 @@ CommandMap = {
 
 mbox_struct = MboxStruct()
 
-mbox_value = int(sys.argv[1], 16)
+mbox_value = int(sys.argv[1], 0)
+assert 0 <= mbox_value < (2**32)
 # then you can pack to it:
 struct.pack_into("!I", mbox_struct, 0, mbox_value)  # offset
 
@@ -147,7 +148,7 @@ if mbox_struct.ResetRequired:
 if mbox_struct.Reserved != 0:
     print("Invalid Message")
 print("AltStat", mbox_struct.AltStat)
-print("CommandId", hex(mbox_struct.CommandId))
+print("CommandId", hex(mbox_struct.CommandId), mbox_struct.CommandId)
 print("Data" if mbox_struct.CmdOrRspns == 0 else "Status", mbox_struct.StatOrDta)
 
 if mbox_struct.CommandId in CommandMap:

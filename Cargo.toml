@@ -10,7 +10,7 @@ libafl = { git = "ssh://git@git.tu-berlin.de/pspreverse/libafl.git", branch ="ma
     "prelude",
     "fork"
 ] }
-libafl_bolts = {  git = "ssh://git@git.tu-berlin.de/pspreverse/libafl.git", branch ="main", features = ["errors_backtrace"]}
+libafl_bolts = {  git = "ssh://git@git.tu-berlin.de/pspreverse/libafl.git", branch ="main", features = ["errors_backtrace", "stable_anymap"]}
 libafl_qemu = {  git = "ssh://git@git.tu-berlin.de/pspreverse/libafl.git", branch ="main", features = [
     "arm",
     "systemmode",

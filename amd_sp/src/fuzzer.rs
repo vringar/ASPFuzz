@@ -18,7 +18,7 @@ use libafl::{
     schedulers::{IndexesLenTimeMinimizerScheduler, QueueScheduler},
     stages::StdMutationalStage,
     state::{HasCorpus, StdState},
-    Error,
+    Error, HasMetadata,
 };
 use libafl_bolts::{
     current_nanos,
@@ -40,7 +40,7 @@ use libasp::{
         get_run_conf,
         write_catcher::{WriteCatcherFeedback, WriteCatcherObserver},
     },
-    CustomMetadataFeedback, ExceptionFeedback,
+    CustomMetadataFeedback, ExceptionFeedback, RegisterMetadata,
 };
 use rangemap::RangeMap;
 
@@ -134,7 +134,7 @@ pub fn fuzz() -> Result<(), Error> {
         log::error!("Snapshot created");
         // The wrapped harness function, calling out to the LLVM-style harness
         let mut harness = |emulator: &mut Emulator<_, _, _, MyState, _>,
-                           _state: &mut MyState,
+                           state: &mut MyState,
                            input: &BytesInput| {
             log::error!("Starting harness");
             let dr_cov_module = emulator
@@ -150,11 +150,12 @@ pub fn fuzz() -> Result<(), Error> {
             conf.yaml_config.input.apply_input(input);
             log::error!("Starting QEMU");
             unsafe {
-                match emulator.qemu().run() {
+                let res = emulator.qemu().run();
+                state.metadata_map_mut().insert(RegisterMetadata::new(qemu));
+                match res {
                     Ok(QemuExitReason::Breakpoint(_)) => {} // continue execution, nothing to do there.
                     Ok(QemuExitReason::Timeout) => {
                         log::error!("Timeout");
-
                         return ExitKind::Timeout;
                     } // timeout, propagate
                     Ok(QemuExitReason::End(QemuShutdownCause::HostSignal(signal))) => {
@@ -216,8 +217,9 @@ pub fn fuzz() -> Result<(), Error> {
                 WriteCatcherFeedback::new(&write_catcher_observer),
                 ExceptionFeedback::default()
             ),
-            feedback_or!(CustomMetadataFeedback::new(qemu), time_feedback)
-        ); // Always false but adds metadata to the output
+            // Always false but adds metadata to the output
+            feedback_or!(CustomMetadataFeedback::default(), time_feedback)
+        );
 
         // If not restarting, create a State from scratch
         let mut state: MyState = state.unwrap_or_else(|| {

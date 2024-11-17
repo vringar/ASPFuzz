@@ -21,7 +21,6 @@ input:
       - addr: 0x10804
         size: 0x4
     fixed:
-      # Setting up fixed addr doesn't work when using off-chip
       - addr: 0x108ae
         val: 0xFFFF
       - addr: 0x108c4
@@ -48,8 +47,10 @@ harness:
 
 # Tunnels describe any fixup that has to happen during execution
 # at a certain address
-# Execute all Jump actions ASAP (these ones happen in early_boot_shared_code_maybe)
-# Otherwise you'll trigger DABRTs
+# Jumps are very finicky
+# Jump to early and the TB will crash
+# Jump to late and there will be Data Aborts
+# The positions can change when upgrading QEMU
 tunnels:
   # fix function in x86_workloop
   - addr: 0x9236
@@ -62,12 +63,12 @@ tunnels:
     target: R0
     value: 0x1
   # SKIP ABL
-  - addr: 0x116c # When the overwriting happens
+  - addr: 0x2938   # When the overwriting happens
     action: Jump
     source: 0x2a1c # what gets overwritten
     target: 0x2a2a # where to jump to
-  # SKIP JUMP TO SECOS -> Go to recovery mailbox
-  - addr: 0x1170
+  # # SKIP JUMP TO SECOS -> Go to recovery mailbox
+  - addr: 0x151a
     action: Jump
     source: 0xd2e8
     target: 0xd2fc

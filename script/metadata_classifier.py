@@ -1,0 +1,64 @@
+from collections import defaultdict
+from pathlib import Path
+import json
+
+# Path to the directory containing your .<hash>.metadata files
+directory_path = Path(__file__).parents[1] / "amd_sp" / "runs" / "test" / "solutions"
+print(f"Looking for metadata files in {directory_path}")
+
+write_locations = defaultdict(lambda: defaultdict(list))
+read_locations = defaultdict(lambda: defaultdict(list))
+
+exceptions = defaultdict(lambda: defaultdict(list))
+
+# Iterate over all files that match the .<hash>.metadata pattern
+for file_path in directory_path.glob(".*.metadata"):
+    try:
+        with file_path.open("r") as f:
+            data = json.load(f)
+            # Navigate to the WriteCatcherMetadata array and check if 'caught_write' is not null
+            meta_map = data.get("metadata", {}).get("map", {})
+            write_catcher = meta_map.get("libasp::bindings::WriteCatcherMetadata")[1]
+            write_caught = write_catcher.get("caught_write")
+            read_caught = write_catcher.get("caught_read")
+
+            if write_caught is not None:
+                write_location, write_pc = write_caught
+                write_locations[write_location][write_pc].append(file_path)
+            if read_caught is not None:
+                read_location, read_pc = read_caught
+                read_locations[read_location][read_pc].append(file_path)
+
+            exception_meta = meta_map.get(
+                "libasp::exception_handler::ExceptionHandlerMetadata", [None, None]
+            )[1]
+            if exception_meta is not None:
+                exception_type = exception_meta.get("triggered_exception")
+                if exception_type is not None:
+                    exceptions[exception_type][
+                        exception_meta["registers"]["lr"]
+                    ].append(file_path)
+
+    except (json.JSONDecodeError, KeyError, IndexError, AttributeError):
+        print(
+            f"Could not process {file_path}, possibly due to malformed JSON or unexpected structure."
+        )
+
+# Print matching files
+for write_loc, per_pc in write_locations.items():
+    for pc, entries in per_pc.items():
+        print(
+            f"Write location: \t {hex(write_loc)}\t PC: {hex(pc)}\t count: {len(entries)}\t Exemplar: {entries[0]}"
+        )
+
+for read_loc, per_pc in read_locations.items():
+    for pc, entries in per_pc.items():
+        print(
+            f"Read location: \t\t {hex(read_loc)}\t PC: {hex(pc)}\t count: {len(entries)}\t Exemplar: {entries[0]}"
+        )
+
+for exception, per_lr in exceptions.items():
+    for lr, entries in per_lr.items():
+        print(
+            f"Exception: \t {exception} \t LR: {lr}\t count: {len(entries)}\t Exemplar: {entries[0]}"
+        )

@@ -98,7 +98,7 @@ pub fn parse_args() -> Vec<String> {
     if conf.debug {
         qemu_args.append(&mut vec![
             "-d".to_string(),
-            "trace:ccp_*,trace:psp_*".to_string(),
+            "trace:ccp_*,trace:psp_*,guest_errors,unimp".to_string(),
             "-D".to_string(),
             format!["{}/logs/qemu.log", run_dir.display()],
         ]);

@@ -40,7 +40,10 @@ where
     S: UsesInput + Unpin + HasMetadata,
 {
     fn pre_exec(&mut self, _state: &mut S, _input: &I) -> Result<(), libafl::Error> {
-        let c = self.c.as_ref().unwrap();
+        self.result = None;
+        let Some(c) = self.c.as_ref() else {
+            return Ok(());
+        };
         assert!(c.start < c.end);
         let size = c.end - c.start;
         self.write_catcher.write_catcher_activate(c.start, size)
