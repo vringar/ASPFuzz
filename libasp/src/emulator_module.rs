@@ -56,7 +56,7 @@ where
         unsafe { addr_of_mut!(NOP_PAGE_FILTER).as_mut().unwrap().get_mut() }
     }
 
-    fn init_module<ET>(&self, modules: &mut EmulatorModules<ET, S>)
+    fn post_qemu_init<ET>(&self, modules: &mut EmulatorModules<ET, S>)
     where
         ET: EmulatorModuleTuple<S>,
     {

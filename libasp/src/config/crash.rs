@@ -95,7 +95,7 @@ where
         unsafe { addr_of_mut!(NOP_PAGE_FILTER).as_mut().unwrap().get_mut() }
     }
 
-    fn init_module<ET>(&self, modules: &mut EmulatorModules<ET, S>)
+    fn post_qemu_init<ET>(&self, modules: &mut EmulatorModules<ET, S>)
     where
         ET: EmulatorModuleTuple<S>,
     {
@@ -174,12 +174,11 @@ where
         return;
     }
     let cpu = emu.current_cpu().unwrap();
-    let pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
+    let pc = cpu.read_reg(Regs::Pc).unwrap();
     assert_eq!(pc as GuestAddr, module.c.mmap.ccp_memcopy_addr);
-    let cpy_src: GuestAddr = cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::R0).unwrap() as GuestAddr;
-    let cpy_dest_start: GuestAddr =
-        cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::R1).unwrap() as GuestAddr;
-    let cpy_len: GuestAddr = cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::R2).unwrap() as GuestAddr;
+    let cpy_src: GuestAddr = cpu.read_reg(Regs::R0).unwrap();
+    let cpy_dest_start: GuestAddr = cpu.read_reg(Regs::R1).unwrap();
+    let cpy_len: GuestAddr = cpu.read_reg(Regs::R2).unwrap();
     let cpy_dest_end: GuestAddr = cpy_dest_start + cpy_len;
     log::debug!(
         "Flash read fn from {:#010x} to {:#010x} for {:#x} bytes",
@@ -191,8 +190,7 @@ where
         if (area.begin >= cpy_dest_start && area.begin < cpy_dest_end)
             || (area.end >= cpy_dest_start && area.end < cpy_dest_end)
         {
-            let cpy_lr: GuestAddr =
-                cpu.read_reg::<libafl_qemu::Regs, u64>(Regs::Lr).unwrap() as GuestAddr;
+            let cpy_lr: GuestAddr = cpu.read_reg(Regs::Lr).unwrap();
             log::debug!(
                 "Flash read fn writes to [{:#010x}, {:#010x}] from function {cpy_lr:#010x}",
                 area.begin,

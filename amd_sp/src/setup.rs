@@ -55,7 +55,7 @@ pub fn parse_args() -> Vec<String> {
     let cli_args = Args::parse();
     // Parse YAML config
     if !cli_args.yaml_path.exists() {
-        println!(
+        log::error!(
             "YAML file path does not exist: {}",
             cli_args.yaml_path.display()
         );
@@ -70,7 +70,9 @@ pub fn parse_args() -> Vec<String> {
     let num_cores = if let Some(num_cores) = cli_args.num_cores {
         num_cores
     } else {
-        println!("For multicore fuzzing a core number must be provided (`cargo make run_fast -h`)");
+        log::error!(
+            "For multicore fuzzing a core number must be provided (`cargo make run_fast -h`)"
+        );
         exit(3);
     };
     init_global_conf(&cli_args.yaml_path, num_cores, run_dir.clone());
@@ -78,14 +80,14 @@ pub fn parse_args() -> Vec<String> {
 
     //Check if pathes exist
     if !conf.qemu.on_chip_bl_path.exists() {
-        println!(
+        log::error!(
             "On-chip-bl file path does not exist: {}",
             conf.qemu.on_chip_bl_path.display()
         );
         exit(4);
     }
     if !conf.flash.base.exists() {
-        println!(
+        log::error!(
             "UEFI file path does not exist: {}",
             &conf.flash.base.display()
         );
@@ -94,7 +96,7 @@ pub fn parse_args() -> Vec<String> {
 
     // Create arguments to start QEMU with
     let mut qemu_args: Vec<String> = vec![env::args().next().unwrap()];
-    println!("QEMU arguments: {:?}", qemu_args);
+    log::debug!("QEMU arguments: {:?}", qemu_args);
     if conf.debug {
         qemu_args.append(&mut vec![
             "-d".to_string(),
@@ -104,6 +106,7 @@ pub fn parse_args() -> Vec<String> {
         ]);
         log::info!("Debug mode enabled");
     }
+    let project_dir = env::var("PROJECT_DIR").expect("PROJECT_DIR not set");
     qemu_args.extend(vec![
         "--machine".to_string(),
         conf.qemu.zen.get_qemu_machine_name().to_string(),
@@ -111,21 +114,17 @@ pub fn parse_args() -> Vec<String> {
         "-device".to_string(),
         format![
             "loader,file={}/{},addr=0xffff0000,force-raw=on",
-            env::var("PROJECT_DIR").unwrap(),
+            project_dir,
             &conf.qemu.on_chip_bl_path.display()
         ],
         "-global".to_string(),
         format![
             "driver=amd_psp.smnflash,property=flash_img,value={}/{}",
-            env::var("PROJECT_DIR").unwrap(),
+            project_dir,
             &conf.flash.base.display()
         ],
         "-bios".to_string(),
-        format![
-            "{}/{}",
-            env::var("PROJECT_DIR").unwrap(),
-            &conf.flash.base.display()
-        ],
+        format!["{}/{}", project_dir, &conf.flash.base.display()],
         "-monitor".to_string(),
         "none".to_string(),
     ]);

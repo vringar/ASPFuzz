@@ -247,7 +247,7 @@ impl ResetState {
         }
         emu.remove_breakpoint(self.regs[Regs::Pc as usize] as GuestAddr);
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
-        let pc: u64 = cpu.read_reg(Regs::Pc).unwrap();
+        let pc = cpu.read_reg(Regs::Pc).unwrap();
         log::debug!("After CPU reset: PC={:#x}", pc);
     }
 

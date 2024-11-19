@@ -58,6 +58,7 @@ pub fn write_mailbox_value(
     ptr_lower: u32,
     ptr_higher: u32,
 ) -> Result<(), Error> {
+    log::error!("Writing mailbox values {mbox:#x}, {ptr_lower:#x}, {ptr_higher:#x}");
     let rc;
     unsafe {
         rc = update_mailbox(mbox, ptr_lower, ptr_higher);

@@ -8,7 +8,7 @@ use libafl::{
     corpus::{CachedOnDiskCorpus, Corpus, OnDiskCorpus},
     events::{launcher::Launcher, EventConfig},
     executors::ExitKind,
-    feedback_or, feedback_or_fast,
+    feedback_and_fast, feedback_or, feedback_or_fast,
     feedbacks::{CrashFeedback, MaxMapFeedback, TimeFeedback},
     fuzzer::{Fuzzer, StdFuzzer},
     inputs::BytesInput,
@@ -65,11 +65,11 @@ pub fn fuzz() -> Result<(), Error> {
         // Configure DrCov helper
         let mut log_drcov_path = log_dir.clone();
         log_drcov_path.push("drcov.log");
-        let mut rangemap = RangeMap::<usize, (u16, String)>::new();
+        let mut rangemap = RangeMap::<u64, (u16, String)>::new();
 
         // TODO: Should this be dynamic?
         rangemap.insert(
-            0x0_usize..0xffff_9000_usize,
+            0x0_u64..0xffff_9000_u64,
             (0, "on-chip-ryzen-zen.bl".to_string()),
         );
         #[allow(clippy::single_range_in_vec_init)]
@@ -136,6 +136,19 @@ pub fn fuzz() -> Result<(), Error> {
         let mut harness = |emulator: &mut Emulator<_, _, _, MyState, _>,
                            state: &mut MyState,
                            input: &BytesInput| {
+            // Restore snapshots first so that observers (which are run after the harness) can see the correct state
+            // OPTION 1: restore only the CPU state (registers et. al)
+            // for (i, s) in saved_cpu_states.iter().enumerate() {
+            //     emu.cpu_from_index(i).restore_state(s);
+            // }
+
+            // OPTION 2: restore a slow vanilla QEMU snapshot
+            // emu.load_snapshot("start", true);
+
+            // OPTION 3: restore a fast devices+mem snapshot
+            unsafe {
+                qemu.restore_fast_snapshot(snap);
+            }
             log::error!("Starting harness");
             let dr_cov_module = emulator
                 .modules_mut()
@@ -179,17 +192,6 @@ pub fn fuzz() -> Result<(), Error> {
                     log::error!("Unexpected exit at PC: {:#x}", pc);
                     ExitKind::Crash
                 };
-
-                // OPTION 1: restore only the CPU state (registers et. al)
-                // for (i, s) in saved_cpu_states.iter().enumerate() {
-                //     emu.cpu_from_index(i).restore_state(s);
-                // }
-
-                // OPTION 2: restore a slow vanilla QEMU snapshot
-                // emu.load_snapshot("start", true);
-
-                // OPTION 3: restore a fast devices+mem snapshot
-                qemu.restore_fast_snapshot(snap);
                 log::error!("Harness done with exit code {ret:?}");
                 ret
             }
@@ -212,10 +214,14 @@ pub fn fuzz() -> Result<(), Error> {
 
         // A feedback to choose if an input is a solution or not
         let mut objective = feedback_or_fast!(
-            feedback_or_fast!(
-                CrashFeedback::new(),
-                WriteCatcherFeedback::new(&write_catcher_observer),
-                ExceptionFeedback::default()
+            feedback_and_fast!(
+                feedback_or_fast!(
+                    CrashFeedback::new(),
+                    WriteCatcherFeedback::new(&write_catcher_observer),
+                    ExceptionFeedback::default()
+                ),
+                // Only report those crashes that resulted in new coverage
+                MaxMapFeedback::new(&edges_observer),
             ),
             // Always false but adds metadata to the output
             feedback_or!(CustomMetadataFeedback::default(), time_feedback)
@@ -272,10 +278,10 @@ pub fn fuzz() -> Result<(), Error> {
                     &[input_dir.as_ref().clone()],
                 )
                 .unwrap_or_else(|_| {
-                    println!("Failed to load initial corpus at {:?}", &input_dir);
+                    log::error!("Failed to load initial corpus at {:?}", &input_dir);
                     process::exit(0);
                 });
-            println!("We imported {} inputs from disk.", state.corpus().count());
+            log::info!("We imported {} inputs from disk.", state.corpus().count());
         }
 
         // Setup an havoc mutator with a mutational stage
@@ -290,9 +296,9 @@ pub fn fuzz() -> Result<(), Error> {
     let shmem_provider = StdShMemProvider::new().expect("Failed to init shared memory");
 
     // The stats reporter for the broker
-    let monitor = MultiMonitor::new(|s| println!("{s}"));
+    let monitor = MultiMonitor::new(|s| log::info!("{s}"));
 
-    // let monitor = SimpleMonitor::new(|s| println!("{s}"));
+    // let monitor = SimpleMonitor::new(|s| log::info!("{s}"));
     // let mut mgr = SimpleEventManager::new(monitor);
     // run_client(None, mgr, 0);
 
@@ -311,7 +317,7 @@ pub fn fuzz() -> Result<(), Error> {
     {
         Ok(()) => Ok(()),
         Err(Error::ShuttingDown) => {
-            println!("Fuzzing stopped by user. Good bye.");
+            log::error!("Fuzzing stopped by user. Good bye.");
             Ok(())
         }
         Err(err) => Err(err),
