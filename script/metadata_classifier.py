@@ -25,7 +25,9 @@ for file_path in directory_path.glob(".*.metadata"):
             data = json.load(f)
             # Navigate to the WriteCatcherMetadata array and check if 'caught_write' is not null
             meta_map = data.get("metadata", {}).get("map", {})
-            write_catcher = meta_map.get("libasp::bindings::WriteCatcherMetadata")[1]
+            write_catcher = meta_map.get(
+                "libasp::bindings::WriteCatcherMetadata", [None, None]
+            )[1]
             write_caught = write_catcher.get("caught_write")
             read_caught = write_catcher.get("caught_read")
 

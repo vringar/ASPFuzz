@@ -9,11 +9,8 @@ if [ -n "$2" ]; then
     TEST_NAME="$2"
 fi
 
-
-
 # Directory to monitor
 DIR_TO_CHECK="$(git root)/amd_sp/runs/$TEST_NAME/solutions"
-
 
 # Function to count items in the folder
 count_items_in_folder() {
@@ -23,14 +20,18 @@ count_items_in_folder() {
 # Monitor the folder every second
 counter=0
 while true; do
+    tput clear
     item_count=$(count_items_in_folder)
     if [ "$item_count" -ge $RESULT_COUNT ]; then
         echo "Folder not is empty"
         pkill aspfuzz
         exit 0
     fi
-    counter=$((counter+1))
-    echo -ne "$counter Folder contain $item_count files \r"
+    if rg -e "Assertion" fuzzer.log &>/dev/null; then
+        echo "Assertion hit"
+    fi
+    counter=$((counter + 1))
+    echo -ne "$counter Folder contain $item_count files \n"
     python ./script/metadata_classifier.py $TEST_NAME
-    sleep 1
+    sleep 5
 done
