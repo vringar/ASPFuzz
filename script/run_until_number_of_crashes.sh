@@ -30,6 +30,9 @@ while true; do
     if rg -e "Assertion" fuzzer.log &>/dev/null; then
         echo "Assertion hit"
     fi
+    if rg -e "Blocked" fuzzer.log &>/dev/null; then
+        echo "Blocked reentrant IO"
+    fi
     counter=$((counter + 1))
     echo -ne "$counter Folder contain $item_count files \n"
     python ./script/metadata_classifier.py $TEST_NAME
