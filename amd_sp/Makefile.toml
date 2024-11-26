@@ -27,7 +27,7 @@ mac_alias = "run_unix"
 windows_alias = "unsupported"
 
 [tasks.run_unix]
-env = { "RUST_LOG" = "off" }
+env = { "RUST_LOG" = "aspfuzz_updates" }
 command = "cargo"
 args = [
     "run", "--release",

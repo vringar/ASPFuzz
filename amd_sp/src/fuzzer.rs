@@ -295,7 +295,7 @@ pub fn fuzz() -> Result<(), Error> {
     let shmem_provider = StdShMemProvider::new().expect("Failed to init shared memory");
 
     // The stats reporter for the broker
-    let monitor = MultiMonitor::new(|s| log::info!("{s}"));
+    let monitor = MultiMonitor::new(|s| log::info!(target: "aspfuzz_updates","{s}"));
     // let monitor = SimpleMonitor::new(|s| log::info!("{s}"));
     // let mgr = SimpleEventManager::new(monitor);
     // run_client(None, mgr, 0)

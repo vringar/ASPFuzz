@@ -105,7 +105,7 @@ pub fn parse_args() -> Vec<String> {
         }
         log::info!("Debug mode enabled");
     }
-    if num_cores != 0 || conf.debug {
+    if num_cores != 0 || !conf.debug {
         qemu_args += " -monitor none";
     }
     let project_dir = env::var("PROJECT_DIR").expect("PROJECT_DIR not set");
