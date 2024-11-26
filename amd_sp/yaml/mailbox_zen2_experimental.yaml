@@ -106,7 +106,7 @@ crashes:
     forbidden_memcopies:
     forbidden_writes:
   x86:
-    start: 0xfffd00000100
+    start: 0xfffd00001000
     end:   0xffffffffffff
 
 # Snapshotting behaviour:
