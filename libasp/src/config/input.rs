@@ -9,7 +9,7 @@ use std::path::PathBuf;
 use std::{fs, vec};
 
 use crate::config::get_run_conf;
-use crate::{write_flash_mem, write_mailbox_value, write_x86_mem};
+use crate::{write_flash_mem, write_mailbox_value, write_x86_mem, MailboxValues};
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct InputLocation {
@@ -189,15 +189,17 @@ impl InputConfig {
         if let Some(true) = self.mailbox {
             write_mailbox_value(
                 cpu,
-                target_buf
-                    .read_u32::<LittleEndian>()
-                    .expect("Not enough bytes for mailbox"),
-                target_buf
-                    .read_u32::<LittleEndian>()
-                    .expect("Not enough bytes for ptr_lower"),
-                target_buf
-                    .read_u32::<LittleEndian>()
-                    .expect("Not enough bytes for ptr_higher"),
+                MailboxValues {
+                    mbox: target_buf
+                        .read_u32::<LittleEndian>()
+                        .expect("Not enough bytes for mailbox"),
+                    ptr_lower: target_buf
+                        .read_u32::<LittleEndian>()
+                        .expect("Not enough bytes for ptr_lower"),
+                    ptr_higher: target_buf
+                        .read_u32::<LittleEndian>()
+                        .expect("Not enough bytes for ptr_higher"),
+                },
             )
             .expect("Failed to write to mailbox");
         }

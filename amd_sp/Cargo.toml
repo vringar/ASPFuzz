@@ -27,3 +27,4 @@ nix = {version ="0.29", features = ["fs"]}
 chrono = "0.4.38"
 rangemap = "1.5.0"
 clap = { version = "4.5", features = ["derive"] }
+shlex = "1.3.0"

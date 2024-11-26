@@ -106,10 +106,6 @@ impl TunnelConfig {
                             hks.qemu()
                                 .write_mem(source, &inst)
                                 .expect("Overwriting instruction failed");
-                            // let cpu = hks.qemu().current_cpu().unwrap();
-                            // let pc: u32 = cpu.read_reg(Regs::Pc).unwrap();
-                            // cpu_set_pc(cpu, (target +1).into())
-                            //     .expect("Failed to set PC");
 
                             hks.qemu().flush_jit();
                         },

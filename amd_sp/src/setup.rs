@@ -95,39 +95,33 @@ pub fn parse_args() -> Vec<String> {
     }
 
     // Create arguments to start QEMU with
-    let mut qemu_args: Vec<String> = vec![env::args().next().unwrap()];
+    let mut qemu_args: String = env::args().next().unwrap();
     log::debug!("QEMU arguments: {:?}", qemu_args);
     if conf.debug {
-        qemu_args.append(&mut vec![
-            "-d".to_string(),
-            "trace:ccp_*,trace:psp_*,guest_errors,unimp".to_string(),
-            "-D".to_string(),
-            format!["{}/logs/qemu.log", run_dir.display()],
-        ]);
+        qemu_args += " -d trace:ccp_*,trace:psp_*,guest_errors,unimp";
+        qemu_args += &format![" -D {}/logs/qemu.log", run_dir.display()];
+        if num_cores == 0 {
+            qemu_args += " -chardev socket,id=mon0,host=127.0.0.1,port=4444,server=on,wait=off -monitor chardev:mon0";
+        }
         log::info!("Debug mode enabled");
     }
+    if num_cores != 0 || conf.debug {
+        qemu_args += " -monitor none";
+    }
     let project_dir = env::var("PROJECT_DIR").expect("PROJECT_DIR not set");
-    qemu_args.extend(vec![
-        "--machine".to_string(),
-        conf.qemu.zen.get_qemu_machine_name().to_string(),
-        "--nographic".to_string(),
-        "-device".to_string(),
-        format![
-            "loader,file={}/{},addr=0xffff0000,force-raw=on",
-            project_dir,
-            &conf.qemu.on_chip_bl_path.display()
-        ],
-        "-global".to_string(),
-        format![
-            "driver=amd_psp.smnflash,property=flash_img,value={}/{}",
-            project_dir,
-            &conf.flash.base.display()
-        ],
-        "-bios".to_string(),
-        format!["{}/{}", project_dir, &conf.flash.base.display()],
-        "-monitor".to_string(),
-        "none".to_string(),
-    ]);
-
-    qemu_args
+    qemu_args += &format![" --machine {}", conf.qemu.zen.get_qemu_machine_name(),];
+    qemu_args += " --nographic";
+    qemu_args += &format!(
+        " -device loader,file={}/{},addr=0xffff0000,force-raw=on",
+        project_dir,
+        &conf.qemu.on_chip_bl_path.display()
+    );
+    qemu_args += &format!(
+        " -global driver=amd_psp.smnflash,property=flash_img,value={}/{}",
+        project_dir,
+        &conf.flash.base.display()
+    );
+    qemu_args += &format![" -bios {}/{}", project_dir, &conf.flash.base.display()];
+    log::debug!("Full QEMU arguments: {:?}", qemu_args);
+    shlex::Shlex::new(&qemu_args).collect::<Vec<String>>()
 }

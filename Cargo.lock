@@ -137,6 +137,7 @@ dependencies = [
  "nix",
  "rangemap",
  "serde",
+ "shlex",
 ]
 
 [[package]]
@@ -419,9 +420,9 @@ dependencies = [
 
 [[package]]
 name = "ctor"
-version = "0.2.8"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edb49164822f3ee45b17acd4a208cfc1251410cf0cad9a833234c9890774dd9f"
+checksum = "32a2785755761f3ddc1492979ce1e48d2c00d09311c39e4466429188f3dd6501"
 dependencies = [
  "quote",
  "syn",
@@ -593,9 +594,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.15.1"
+version = "0.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a9bfc1af68b1726ea47d3d5109de126281def866b33970e10fbab11b5dafab3"
+checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 
 [[package]]
 name = "heck"
@@ -659,7 +660,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "707907fe3c25f5424cce2cb7e1cbcafee6bdbe735ca90ef77c29e84591e5b9da"
 dependencies = [
  "equivalent",
- "hashbrown 0.15.1",
+ "hashbrown 0.15.2",
 ]
 
 [[package]]
@@ -679,9 +680,9 @@ dependencies = [
 
 [[package]]
 name = "itoa"
-version = "1.0.11"
+version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
+checksum = "d75a2a4b1b190afb6f5425f10f6a8f959d2ea0b9c2b1d79553551850539e4674"
 
 [[package]]
 name = "jobserver"
@@ -710,7 +711,7 @@ checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 [[package]]
 name = "libafl"
 version = "0.14.0"
-source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#a28b5bd11898d13d819ad35cfe862733a329a304"
+source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#478e12b68ce85d686d57d678e052217e799928a9"
 dependencies = [
  "ahash",
  "arbitrary-int",
@@ -744,7 +745,7 @@ dependencies = [
 [[package]]
 name = "libafl_bolts"
 version = "0.14.0"
-source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#a28b5bd11898d13d819ad35cfe862733a329a304"
+source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#478e12b68ce85d686d57d678e052217e799928a9"
 dependencies = [
  "ahash",
  "backtrace",
@@ -776,7 +777,7 @@ dependencies = [
 [[package]]
 name = "libafl_derive"
 version = "0.14.0"
-source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#a28b5bd11898d13d819ad35cfe862733a329a304"
+source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#478e12b68ce85d686d57d678e052217e799928a9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -786,7 +787,7 @@ dependencies = [
 [[package]]
 name = "libafl_qemu"
 version = "0.14.0"
-source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#a28b5bd11898d13d819ad35cfe862733a329a304"
+source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#478e12b68ce85d686d57d678e052217e799928a9"
 dependencies = [
  "addr2line",
  "bindgen",
@@ -826,7 +827,7 @@ dependencies = [
 [[package]]
 name = "libafl_qemu_build"
 version = "0.14.0"
-source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#a28b5bd11898d13d819ad35cfe862733a329a304"
+source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#478e12b68ce85d686d57d678e052217e799928a9"
 dependencies = [
  "bindgen",
  "cc",
@@ -842,7 +843,7 @@ dependencies = [
 [[package]]
 name = "libafl_qemu_sys"
 version = "0.14.0"
-source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#a28b5bd11898d13d819ad35cfe862733a329a304"
+source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#478e12b68ce85d686d57d678e052217e799928a9"
 dependencies = [
  "libafl_qemu_build",
  "libc",
@@ -856,7 +857,7 @@ dependencies = [
 [[package]]
 name = "libafl_targets"
 version = "0.14.0"
-source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#a28b5bd11898d13d819ad35cfe862733a329a304"
+source = "git+ssh://git@git.tu-berlin.de/pspreverse/libafl.git?branch=main#478e12b68ce85d686d57d678e052217e799928a9"
 dependencies = [
  "bindgen",
  "cc",
@@ -889,9 +890,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.164"
+version = "0.2.165"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "433bfe06b8c75da9b2e3fbea6e5329ff87748f0b144ef75306e674c3f6f7c13f"
+checksum = "fcb4d3d38eab6c5239a362fa8bae48c03baf980a6e7079f063942d563ef3533e"
 
 [[package]]
 name = "libloading"
@@ -1172,9 +1173,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.89"
+version = "1.0.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f139b0662de085916d1fb67d2b4169d1addddda1919e696f3252b740b629986e"
+checksum = "37d3544b3f2748c54e147655edb5025752e2303145b5aefb3c3ea2c78b973bb0"
 dependencies = [
  "unicode-ident",
 ]
@@ -1469,9 +1470,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.87"
+version = "2.0.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25aa4ce346d03a6dcd68dd8b4010bcb74e54e62c90c573f394c46eae99aba32d"
+checksum = "44d46482f1c1c87acd84dea20c1bf5ebff4c757009ed6bf19cfd36fb10e92c4e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1561,9 +1562,9 @@ checksum = "0e13db2e0ccd5e14a544e8a246ba2312cd25223f616442d7f2cb0e3db614236e"
 
 [[package]]
 name = "typewit"
-version = "1.9.0"
+version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6fb9ae6a3cafaf0a5d14c2302ca525f9ae8e07a0f0e6949de88d882c37a6e24"
+checksum = "d51dbd25812f740f45e2a9769f84711982e000483b13b73a8a1852e092abac8c"
 dependencies = [
  "typewit_proc_macros",
 ]
@@ -1585,9 +1586,9 @@ dependencies = [
 
 [[package]]
 name = "unicode-ident"
-version = "1.0.13"
+version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e91b56cd4cadaeb79bbf1a5645f6b4f8dc5bde8834ad5894a8db35fda9efa1fe"
+checksum = "adb9e6ca4f869e1180728b7950e35922a7fc6397f7b641499e8f3ef06e50dc83"
 
 [[package]]
 name = "unicode-xid"

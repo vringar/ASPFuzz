@@ -6,7 +6,7 @@ use std::{ops::Deref, process};
 use crate::setup::{parse_args, setup_directory_structure};
 use libafl::{
     corpus::{CachedOnDiskCorpus, Corpus, OnDiskCorpus},
-    events::{launcher::Launcher, EventConfig},
+    events::{EventConfig, Launcher},
     executors::ExitKind,
     feedback_and_fast, feedback_or, feedback_or_fast,
     feedbacks::{CrashFeedback, MaxMapFeedback, TimeFeedback},
@@ -136,19 +136,6 @@ pub fn fuzz() -> Result<(), Error> {
         let mut harness = |emulator: &mut Emulator<_, _, _, MyState, _>,
                            state: &mut MyState,
                            input: &BytesInput| {
-            // Restore snapshots first so that observers (which are run after the harness) can see the correct state
-            // OPTION 1: restore only the CPU state (registers et. al)
-            // for (i, s) in saved_cpu_states.iter().enumerate() {
-            //     emu.cpu_from_index(i).restore_state(s);
-            // }
-
-            // OPTION 2: restore a slow vanilla QEMU snapshot
-            // emu.load_snapshot("start", true);
-
-            // OPTION 3: restore a fast devices+mem snapshot
-            unsafe {
-                qemu.restore_fast_snapshot(snap);
-            }
             log::error!("Starting harness");
             let dr_cov_module = emulator
                 .modules_mut()
@@ -193,6 +180,18 @@ pub fn fuzz() -> Result<(), Error> {
                     ExitKind::Crash
                 };
                 log::error!("Harness done with exit code {ret:?}");
+                // Restore snapshots first so that observers (which are run after the harness) can see the correct state
+                // OPTION 1: restore only the CPU state (registers et. al)
+                // for (i, s) in saved_cpu_states.iter().enumerate() {
+                //     emu.cpu_from_index(i).restore_state(s);
+                // }
+
+                // OPTION 2: restore a slow vanilla QEMU snapshot
+                // emu.load_snapshot("start", true);
+
+                // OPTION 3: restore a fast devices+mem snapshot
+                qemu.restore_fast_snapshot(snap);
+
                 ret
             }
         };
@@ -297,12 +296,11 @@ pub fn fuzz() -> Result<(), Error> {
 
     // The stats reporter for the broker
     let monitor = MultiMonitor::new(|s| log::info!("{s}"));
-
     // let monitor = SimpleMonitor::new(|s| log::info!("{s}"));
-    // let mut mgr = SimpleEventManager::new(monitor);
-    // run_client(None, mgr, 0);
+    // let mgr = SimpleEventManager::new(monitor);
+    // run_client(None, mgr, 0)
 
-    // Build and run a Launcher
+    //Build and run a Launcher
     let num_cores = get_run_conf().unwrap().num_cores;
     let cores = Cores::from_cmdline(&format!("0-{num_cores}")).unwrap();
     match Launcher::builder()

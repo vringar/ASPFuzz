@@ -5,8 +5,8 @@
 use libafl::Error;
 use libafl_bolts::impl_serdeany;
 use libafl_qemu::{
-    sys::{hwaddr, vaddr, CPUStatePtr},
-    GuestAddr, CPU,
+    sys::{hwaddr, vaddr},
+    GuestAddr, QemuError, CPU,
 };
 use serde::{Deserialize, Serialize};
 
@@ -14,14 +14,11 @@ use serde::{Deserialize, Serialize};
 extern "C" {
     fn aspfuzz_write_smn_flash(addr: hwaddr, len: hwaddr, buf: *mut u8);
     fn aspfuzz_x86_write(addr: hwaddr, buf: *mut u8, len: hwaddr) -> i32;
-    fn update_mailbox(mbox: u32, ptr_lower: u32, ptr_higher: u32) -> i32;
-    fn read_mailbox(mbox: *mut u32, ptr_lower: *mut u32, ptr_higher: *mut u32) -> i32;
     fn aspfuzz_write_catcher_activate(addr: hwaddr, size: hwaddr) -> i32;
     fn aspfuzz_write_catcher_reset() -> i32;
     /// This is a little tricky to use because we will always just write back
     /// the value in our current struct, so we need to treat 0 as a special case
     fn aspfuzz_write_catcher_status(get_read: bool, addr: *mut hwaddr, pc: *mut vaddr) -> i32;
-    fn set_pc(cpu: CPUStatePtr, new_pc: vaddr) -> i32;
 }
 /// # Safety
 /// This function should only be called if QEMU has been fully initialized
@@ -51,23 +48,17 @@ pub fn write_x86_mem(_cpu: &CPU, addr: GuestAddr, buf: &[u8]) -> Result<(), Erro
     }
 }
 
+const MAILBOX_BASE_ADDR: GuestAddr = 0x03010570;
+
 /// Provide the CPU as proof that QEMU has been initialized and is halted
-pub fn write_mailbox_value(
-    _cpu: &CPU,
-    mbox: u32,
-    ptr_lower: u32,
-    ptr_higher: u32,
-) -> Result<(), Error> {
-    log::error!("Writing mailbox values {mbox:#x}, {ptr_lower:#x}, {ptr_higher:#x}");
-    let rc;
-    unsafe {
-        rc = update_mailbox(mbox, ptr_lower, ptr_higher);
-    }
-    if rc == 0 {
-        Ok(())
-    } else {
-        Err(Error::illegal_state("Failed to update mailbox"))
-    }
+pub fn write_mailbox_value(cpu: &CPU, values: MailboxValues) -> Result<(), Error> {
+    cpu.write_mem(MAILBOX_BASE_ADDR, &values.mbox.to_le_bytes())
+        .map_err(QemuError::RW)?;
+    cpu.write_mem(MAILBOX_BASE_ADDR + 4, &values.ptr_lower.to_le_bytes())
+        .map_err(QemuError::RW)?;
+    cpu.write_mem(MAILBOX_BASE_ADDR + 8, &values.ptr_lower.to_le_bytes())
+        .map_err(QemuError::RW)?;
+    Ok(())
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -78,29 +69,18 @@ pub struct MailboxValues {
 }
 impl_serdeany!(MailboxValues);
 
-pub fn read_mailbox_value(_cpu: &CPU) -> Result<MailboxValues, Error> {
-    let mut mbox = MailboxValues::default();
-    let rc;
-    unsafe {
-        rc = read_mailbox(&mut mbox.mbox, &mut mbox.ptr_lower, &mut mbox.ptr_higher);
-    }
-    if rc == 0 {
-        Ok(mbox)
-    } else {
-        Err(Error::illegal_state("Failed to read mailbox"))
-    }
-}
-
-pub fn cpu_set_pc(cpu: CPU, new_pc: vaddr) -> Result<(), Error> {
-    let rc;
-    unsafe {
-        rc = set_pc(cpu.raw_ptr(), new_pc);
-    }
-    if rc == 0 {
-        Ok(())
-    } else {
-        Err(Error::illegal_state("Failed to set PC"))
-    }
+pub fn read_mailbox_value(cpu: &CPU) -> Result<MailboxValues, Error> {
+    let mut buf = [0u8; 4 * 3];
+    cpu.read_mem(MAILBOX_BASE_ADDR, &mut buf)
+        .map_err(QemuError::RW)?;
+    let mbox = u32::from_le_bytes(buf[0..4].try_into().unwrap());
+    let ptr_lower = u32::from_le_bytes(buf[4..8].try_into().unwrap());
+    let ptr_higher = u32::from_le_bytes(buf[8..12].try_into().unwrap());
+    Ok(MailboxValues {
+        mbox,
+        ptr_lower,
+        ptr_higher,
+    })
 }
 
 #[derive(Debug, Deserialize, Serialize)]
