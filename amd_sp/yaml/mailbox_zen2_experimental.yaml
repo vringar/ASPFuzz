@@ -11,7 +11,7 @@ flash:
   # Base image in flash memory
   base: "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
 
-debug: true
+debug: false
 input:
   flash:
     # No initial content
@@ -106,7 +106,7 @@ crashes:
     forbidden_memcopies:
     forbidden_writes:
   x86:
-    start: 0xfffd00001000
+    start: 0xfffdfc001000
     end:   0xffffffffffff
 
 # Snapshotting behaviour:
