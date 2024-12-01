@@ -10,7 +10,7 @@ if [ -n "$2" ]; then
 fi
 
 # Directory to monitor
-DIR_TO_CHECK="$(git root)/amd_sp/runs/$TEST_NAME/solutions"
+DIR_TO_CHECK="$(git rev-parse --show-toplevel)/amd_sp/runs/$TEST_NAME/solutions"
 
 # Function to count items in the folder
 count_items_in_folder() {
@@ -21,6 +21,7 @@ count_items_in_folder() {
 counter=0
 while true; do
     tput clear
+    echo "Checking $DIR_TO_CHECK"
     item_count=$(count_items_in_folder)
     if [ "$item_count" -ge $RESULT_COUNT ]; then
         echo "Folder not is empty"
