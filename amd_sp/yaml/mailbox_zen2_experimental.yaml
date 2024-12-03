@@ -26,6 +26,8 @@ input:
       - addr: 0x108c4
         val: 0x0
   mailbox: true
+  initial_inputs:
+    - /run/media/stefan/02e400c2-1bdd-4d46-a0dd-044d6b4f3af4/uni/ASPFuzz/amd_sp/runs/tompute/solutions/
 
 
 # Harness

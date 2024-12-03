@@ -5,7 +5,7 @@ use libafl_qemu::sys::GuestUsize;
 /// Generate initial inputs for the fuzzer based on provided UEFI images
 use libafl_qemu::{GuestAddr, Qemu};
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{fs, vec};
 
 use crate::config::get_run_conf;
@@ -101,6 +101,7 @@ pub struct InputConfig {
     psp: Option<MemoryConfig>,
     #[serde(default)]
     mailbox: Option<bool>,
+    initial_inputs: Option<Vec<PathBuf>>,
 }
 
 impl InputConfig {
@@ -113,7 +114,7 @@ impl InputConfig {
 }
 
 impl InputConfig {
-    pub fn create_initial_inputs(&self, flash_size: GuestAddr, input_dir: &PathBuf) {
+    pub fn create_initial_inputs(&self, flash_size: GuestAddr, input_dir: &Path) {
         let input_total_size = self.total_size();
 
         if let Some(flash) = &self.flash {
@@ -143,12 +144,54 @@ impl InputConfig {
             }
             return;
         }
-
-        let mut new_input_path = PathBuf::from(&input_dir);
-        new_input_path.push("input0000");
-        fs::write(new_input_path, vec![0_u8; input_total_size]).unwrap();
+        self.setup_input_dir(input_dir).or_else(|| {
+            let mut new_input_path = PathBuf::from(&input_dir);
+            new_input_path.push("input0000");
+            fs::write(new_input_path, vec![0_u8; input_total_size]).unwrap();
+            Some(())
+        });
     }
 
+    pub fn setup_input_dir(&self, target_dir: &Path) -> Option<()> {
+        let Some(inputs) = &self.initial_inputs else {
+            return None;
+        };
+        let mut counter = 0;
+        for input in inputs {
+            if input.is_dir() {
+                let Ok(read_dir) = fs::read_dir(input) else {
+                    log::error!("Failed to read directory {}", input.display());
+                    continue;
+                };
+                for entry in read_dir {
+                    let Ok(entry) = entry else {
+                        log::error!("Failed to read entry in directory {}", input.display());
+                        continue;
+                    };
+                    let entry_path = entry.path();
+                    fs::copy(
+                        &entry_path,
+                        target_dir.join(entry_path.file_name().unwrap()),
+                    )
+                    .unwrap();
+                    counter += 1;
+                }
+            } else {
+                log::error!("Input path is not a directory {}", input.display());
+                let path = target_dir.join(input.file_name().unwrap());
+                let Ok(_) = fs::copy(input, path) else {
+                    log::error!("Failed to copy input file {}", input.display());
+                    continue;
+                };
+                counter += 1;
+            }
+        }
+        if counter == 0 {
+            None
+        } else {
+            Some(())
+        }
+    }
     pub fn apply_input(&self, input: &BytesInput) {
         // Input to memory
         let target = input.target_bytes();
