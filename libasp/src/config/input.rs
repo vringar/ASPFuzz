@@ -186,6 +186,11 @@ impl InputConfig {
                 counter += 1;
             }
         }
+        log::debug!(
+            "Copied {} initial inputs to {}",
+            counter,
+            target_dir.display()
+        );
         if counter == 0 {
             None
         } else {
