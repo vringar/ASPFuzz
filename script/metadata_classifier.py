@@ -6,11 +6,16 @@ test_dir = "test"
 # Check if a different test dir was passed as argument
 import sys
 
+valuable_crashes = False
 if len(sys.argv) > 1:
     test_dir = sys.argv[1]
+if len(sys.argv) > 2:
+    # We want to get the list of valuable crashes
+    valuable_crashes = True
 # Path to the directory containing your .<hash>.metadata files
 directory_path = Path(__file__).parents[1] / "amd_sp" / "runs" / test_dir / "solutions"
-print(f"Looking for metadata files in {directory_path}")
+if not valuable_crashes:
+    print(f"Looking for metadata files in {directory_path}")
 
 write_locations = defaultdict(lambda: defaultdict(list))
 read_locations = defaultdict(lambda: defaultdict(list))
@@ -60,7 +65,22 @@ for file_path in directory_path.glob(".*.metadata"):
         print(
             f"Could not process {file_path}, possibly due to malformed JSON or unexpected structure."
         )
-
+# python ./script/metadata_classifier.py tompute true > file_list.txt
+# rsync -av -e ssh --files-from=file_list.txt amd_sp/runs/tompute/solutions tompute:~/projects/ASPFuzz/amd_sp/bins/seed
+if valuable_crashes:
+    for per_pc in write_locations.values():
+        for entries in per_pc.values():
+            for entry in entries:
+                name = Path(entry).name
+                actual_data = name.removeprefix(".").removesuffix(".metadata")
+                print(actual_data)
+    for per_pc in read_locations.values():
+        for entries in per_pc.values():
+            for entry in entries:
+                name = Path(entry).name
+                actual_data = name.removeprefix(".").removesuffix(".metadata")
+                print(actual_data)
+    exit(0)
 # Print matching files
 for write_loc, per_pc in write_locations.items():
     for pc, entries in per_pc.items():
