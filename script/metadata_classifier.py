@@ -38,10 +38,10 @@ for file_path in directory_path.glob(".*.metadata"):
 
             if write_caught is not None:
                 write_location, write_pc = write_caught
-                write_locations[write_location][write_pc].append(file_path)
+                write_locations[write_pc][write_location].append(file_path)
             if read_caught is not None:
                 read_location, read_pc = read_caught
-                read_locations[read_location][read_pc].append(file_path)
+                read_locations[read_pc][read_location].append(file_path)
 
             exception_meta = meta_map.get(
                 "libasp::exception_handler::ExceptionHandlerMetadata", [None, None]
@@ -68,8 +68,8 @@ for file_path in directory_path.glob(".*.metadata"):
 # python ./script/metadata_classifier.py tompute true > file_list.txt
 # rsync -av -e ssh --files-from=file_list.txt amd_sp/runs/tompute/solutions tompute:~/projects/ASPFuzz/amd_sp/bins/seed
 if valuable_crashes:
-    for per_pc in write_locations.values():
-        for entries in per_pc.values():
+    for per_write_location in write_locations.values():
+        for entries in per_write_location.values():
             for entry in entries:
                 name = Path(entry).name
                 actual_data = name.removeprefix(".").removesuffix(".metadata")
@@ -82,16 +82,16 @@ if valuable_crashes:
                 print(actual_data)
     exit(0)
 # Print matching files
-for write_loc, per_pc in write_locations.items():
-    for pc, entries in per_pc.items():
+for pc, per_write_loc in write_locations.items():
+    for write_loc, entries in per_write_loc.items():
         print(
-            f"Write location: \t {hex(write_loc)}\t PC: {hex(pc)}\t count: {len(entries)}\t Exemplar: {entries[0]}"
+            f"PC: {hex(pc)}\t Write location: \t {hex(write_loc)}\t count: {len(entries)}\t Exemplar: {entries[0]}"
         )
 
-for read_loc, per_pc in read_locations.items():
-    for pc, entries in per_pc.items():
+for pc, per_read_loc in read_locations.items():
+    for read_loc, entries in per_read_loc.items():
         print(
-            f"Read location: \t\t {hex(read_loc)}\t PC: {hex(pc)}\t count: {len(entries)}\t Exemplar: {entries[0]}"
+            f"PC: {hex(pc)}\t Read location: \t\t {hex(read_loc)}\t count: {len(entries)}\t Exemplar: {entries[0]}"
         )
 
 for exception, per_lr in exceptions.items():
