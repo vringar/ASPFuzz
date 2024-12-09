@@ -17,16 +17,20 @@ directory_path = Path(__file__).parents[1] / "amd_sp" / "runs" / test_dir / "sol
 if not valuable_crashes:
     print(f"Looking for metadata files in {directory_path}")
 
-write_locations = defaultdict(lambda: defaultdict(list))
-read_locations = defaultdict(lambda: defaultdict(list))
+write_locations = defaultdict(lambda: defaultdict(set))
+read_locations = defaultdict(lambda: defaultdict(set))
 
-exceptions = defaultdict(lambda: defaultdict(list))
+exceptions = defaultdict(lambda: defaultdict(set))
 
-real_mailbox_ptr = []
 # Iterate over all files that match the .<hash>.metadata pattern
 for file_path in directory_path.glob(".*.metadata"):
     try:
         with file_path.open("r") as f:
+            name = file_path.name
+            # Deduplicate the name for entries with the same hash
+            first_hash = name.removeprefix(".").removesuffix(".metadata")
+            first_hash = first_hash.split("-")[0]
+            actual_data = directory_path / first_hash
             data = json.load(f)
             # Navigate to the WriteCatcherMetadata array and check if 'caught_write' is not null
             meta_map = data.get("metadata", {}).get("map", {})
@@ -38,10 +42,10 @@ for file_path in directory_path.glob(".*.metadata"):
 
             if write_caught is not None:
                 write_location, write_pc = write_caught
-                write_locations[write_pc][write_location].append(file_path)
+                write_locations[write_pc][write_location].add(actual_data)
             if read_caught is not None:
                 read_location, read_pc = read_caught
-                read_locations[read_pc][read_location].append(file_path)
+                read_locations[read_pc][read_location].add(actual_data)
 
             exception_meta = meta_map.get(
                 "libasp::exception_handler::ExceptionHandlerMetadata", [None, None]
@@ -49,21 +53,12 @@ for file_path in directory_path.glob(".*.metadata"):
             if exception_meta is not None:
                 exception_type = exception_meta.get("triggered_exception")
                 if exception_type is not None:
-                    exceptions[exception_type][
-                        exception_meta["registers"]["lr"]
-                    ].append(file_path)
-            mailbox_meta = meta_map.get(
-                "libasp::emulator_module::MiscMetadata", [None, None]
-            )[1]
-            if mailbox_meta is not None:
-                ptr_lower = mailbox_meta.get("ptr_lower", 0)
-                ptr_higher = mailbox_meta.get("ptr_higher", 0)
-                if ptr_lower != 0 or ptr_higher != 0:
-                    real_mailbox_ptr.append((ptr_lower, ptr_higher))
-
-    except (json.JSONDecodeError, KeyError, IndexError, AttributeError):
+                    exceptions[exception_type][exception_meta["registers"]["lr"]].add(
+                        actual_data
+                    )
+    except (json.JSONDecodeError, KeyError, IndexError, AttributeError) as e:
         print(
-            f"Could not process {file_path}, possibly due to malformed JSON or unexpected structure."
+            f"Could not process {file_path}, possibly due to malformed JSON or unexpected structure. error: {e}"
         )
 # python ./script/metadata_classifier.py tompute true > file_list.txt
 # rsync -av -e ssh --files-from=file_list.txt amd_sp/runs/tompute/solutions tompute:~/projects/ASPFuzz/amd_sp/bins/seed
@@ -71,35 +66,28 @@ if valuable_crashes:
     for per_write_location in write_locations.values():
         for entries in per_write_location.values():
             for entry in entries:
-                name = Path(entry).name
-                actual_data = name.removeprefix(".").removesuffix(".metadata")
-                print(actual_data)
+                print(entry.name)
     for per_pc in read_locations.values():
         for entries in per_pc.values():
             for entry in entries:
-                name = Path(entry).name
-                actual_data = name.removeprefix(".").removesuffix(".metadata")
-                print(actual_data)
+                print(entry.name)
     exit(0)
+
 # Print matching files
 for pc, per_write_loc in write_locations.items():
     for write_loc, entries in per_write_loc.items():
         print(
-            f"PC: {hex(pc)}\t Write location: \t {hex(write_loc)}\t count: {len(entries)}\t Exemplar: {entries[0]}"
+            f"PC: {hex(pc)}\t Write location: \t {hex(write_loc)}\t count: {len(entries)}\t Exemplar: {entries.pop()}"
         )
 
 for pc, per_read_loc in read_locations.items():
     for read_loc, entries in per_read_loc.items():
         print(
-            f"PC: {hex(pc)}\t Read location: \t\t {hex(read_loc)}\t count: {len(entries)}\t Exemplar: {entries[0]}"
+            f"PC: {hex(pc)}\t Read location: \t {hex(read_loc)}\t count: {len(entries)}\t Exemplar: {entries.pop()}"
         )
 
 for exception, per_lr in exceptions.items():
     for lr, entries in per_lr.items():
         print(
-            f"Exception: \t {exception} \t LR: {lr}\t count: {len(entries)}\t Exemplar: {entries[0]}"
+            f"Exception: \t {exception} \t LR: {lr}\t count: {len(entries)}\t Exemplar: {entries.pop()}"
         )
-
-print("length:", len(real_mailbox_ptr))
-for ptr in real_mailbox_ptr:
-    print(f"Mailbox ptr: \t {ptr[0]:#x} {ptr[1]:#x}")

@@ -142,14 +142,12 @@ impl InputConfig {
                     fs::write(new_input_path, new_input_image).unwrap();
                 }
             }
-            return;
         }
-        self.setup_input_dir(input_dir).or_else(|| {
-            let mut new_input_path = PathBuf::from(&input_dir);
-            new_input_path.push("input0000");
-            fs::write(new_input_path, vec![0_u8; input_total_size]).unwrap();
-            Some(())
-        });
+        self.setup_input_dir(input_dir);
+        // Create a default input if there are no inputs or all other inputs are wins
+        let mut new_input_path = PathBuf::from(&input_dir);
+        new_input_path.push("input0000");
+        fs::write(new_input_path, vec![0_u8; input_total_size]).unwrap();
     }
 
     pub fn setup_input_dir(&self, target_dir: &Path) -> Option<()> {
