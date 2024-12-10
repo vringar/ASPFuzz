@@ -242,9 +242,11 @@ impl InputConfig {
                     ptr_lower: target_buf
                         .read_u32::<LittleEndian>()
                         .expect("Not enough bytes for ptr_lower"),
-                    ptr_higher: target_buf
+                    ptr_higher: (target_buf
                         .read_u32::<LittleEndian>()
-                        .expect("Not enough bytes for ptr_higher"),
+                        .expect("Not enough bytes for ptr_higher")
+                        | 0x0000_fffc)
+                        & 0x0000_ffff,
                 },
             )
             .expect("Failed to write to mailbox");

@@ -23,7 +23,7 @@ use libafl::{
 use libafl_bolts::{
     current_nanos,
     ownedref::OwnedMutSlice,
-    prelude::Cores,
+    prelude::{CoreId, Cores},
     rands::{RomuDuoJrRand, StdRand},
     shmem::{ShMemProvider, StdShMemProvider},
     tuples::{tuple_list, Prepend},
@@ -59,7 +59,7 @@ pub fn fuzz() -> Result<(), Error> {
         .input
         .create_initial_inputs(conf.yaml_config.flash.size, &input_dir);
     let input_dir = Box::new(input_dir);
-    let mut run_client = move |state: Option<MyState>, mut mgr, _core_id| {
+    let mut run_client = move |state: Option<MyState>, mut mgr, core_id: CoreId| {
         log::error!("Starting client");
         let conf = get_run_conf().unwrap();
         // Configure DrCov helper
@@ -229,7 +229,7 @@ pub fn fuzz() -> Result<(), Error> {
         let mut state: MyState = state.unwrap_or_else(|| {
             StdState::new(
                 // RNG
-                StdRand::with_seed(current_nanos()),
+                StdRand::with_seed(current_nanos() + core_id.0 as u64),
                 // Corpus that will be evolved, we keep it in memory for performance
                 CachedOnDiskCorpus::new(input_dir.deref(), 1000).unwrap(),
                 // Corpus in which we store solutions (crashes in this example),
