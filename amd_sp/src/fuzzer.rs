@@ -213,14 +213,13 @@ pub fn fuzz() -> Result<(), Error> {
 
         // A feedback to choose if an input is a solution or not
         let mut objective = feedback_or_fast!(
-            feedback_and_fast!(
-                feedback_or_fast!(
-                    CrashFeedback::new(),
-                    WriteCatcherFeedback::new(&write_catcher_observer),
-                    ExceptionFeedback::default()
+            feedback_or!(
+                WriteCatcherFeedback::new(&write_catcher_observer),
+                feedback_and_fast!(
+                    feedback_or_fast!(CrashFeedback::new(), ExceptionFeedback::default()),
+                    // Only report those crashes that resulted in new coverage
+                    MaxMapFeedback::new(&edges_observer),
                 ),
-                // Only report those crashes that resulted in new coverage
-                MaxMapFeedback::new(&edges_observer),
             ),
             // Always false but adds metadata to the output
             feedback_or!(CustomMetadataFeedback::default(), time_feedback)

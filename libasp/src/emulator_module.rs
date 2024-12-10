@@ -28,7 +28,7 @@ impl LibAspModule {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 
 pub struct MiscMetadata {
-    mailbox_values: MailboxValues,
+    pub mailbox_values: MailboxValues,
 }
 libafl_bolts::impl_serdeany!(MiscMetadata);
 
