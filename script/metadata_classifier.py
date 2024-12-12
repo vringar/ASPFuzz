@@ -6,6 +6,10 @@ test_dir = "test"
 # Check if a different test dir was passed as argument
 import sys
 
+sys.path.append(str(Path(__file__).parent))
+
+from parse_mbox import parse_mailbox
+
 valuable_crashes = False
 if len(sys.argv) > 1:
     test_dir = sys.argv[1]
@@ -21,6 +25,8 @@ write_locations = defaultdict(lambda: defaultdict(set))
 read_locations = defaultdict(lambda: defaultdict(set))
 
 exceptions = defaultdict(lambda: defaultdict(set))
+
+crashing_commands = set()
 
 # Iterate over all files that match the .<hash>.metadata pattern
 for file_path in directory_path.glob(".*.metadata"):
@@ -46,6 +52,13 @@ for file_path in directory_path.glob(".*.metadata"):
             if read_caught is not None:
                 read_location, read_pc = read_caught
                 read_locations[read_pc][read_location].add(actual_data)
+            if write_caught is not None or read_caught is not None:
+                misc_meta = meta_map.get(
+                    "libasp::emulator_module::MiscMetadata", [None, None]
+                )[1]
+                if misc_meta is not None:
+                    mailbox_meta = misc_meta.get("mailbox_values")
+                    crashing_commands.add(parse_mailbox(mailbox_meta["mbox"]).CommandId)
 
             exception_meta = meta_map.get(
                 "libasp::exception_handler::ExceptionHandlerMetadata", [None, None]
@@ -91,3 +104,5 @@ for exception, per_lr in exceptions.items():
         print(
             f"Exception: \t {exception} \t LR: {lr}\t count: {len(entries)}\t Exemplar: {entries.pop()}"
         )
+
+print(f"Crashing commands: {crashing_commands}")

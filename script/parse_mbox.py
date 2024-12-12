@@ -133,24 +133,29 @@ CommandMap = {
     ],
 }
 
-mbox_struct = MboxStruct()
 
-mbox_value = int(sys.argv[1], 0)
-assert 0 <= mbox_value < (2**32)
-# then you can pack to it:
-struct.pack_into("!I", mbox_struct, 0, mbox_value)  # offset
+def parse_mailbox(mbox_value):
+    mbox_struct = MboxStruct()
 
-print("CmdOrRspns", "Command" if mbox_struct.CmdOrRspns == 0 else "Response")
-if mbox_struct.Recovery:
-    print("Recovery requested")
-if mbox_struct.ResetRequired:
-    print("Reset required")
-if mbox_struct.Reserved != 0:
-    print("Invalid Message")
-print("AltStat", mbox_struct.AltStat)
-print("CommandId", hex(mbox_struct.CommandId), mbox_struct.CommandId)
-print("Data" if mbox_struct.CmdOrRspns == 0 else "Status", mbox_struct.StatOrDta)
+    assert 0 <= mbox_value < (2**32)
+    # then you can pack to it:
+    struct.pack_into("!I", mbox_struct, 0, mbox_value)  # offset
+    return mbox_struct
 
-if mbox_struct.CommandId in CommandMap:
-    print("Command name: ", CommandMap[mbox_struct.CommandId][0])
-    print("Command Description:", CommandMap[mbox_struct.CommandId][1])
+
+if __name__ == "__main__":
+    mbox_struct = parse_mailbox(int(sys.argv[1], 0))
+    print("CmdOrRspns", "Command" if mbox_struct.CmdOrRspns == 0 else "Response")
+    if mbox_struct.Recovery:
+        print("Recovery requested")
+    if mbox_struct.ResetRequired:
+        print("Reset required")
+    if mbox_struct.Reserved != 0:
+        print("Invalid Message")
+    print("AltStat", mbox_struct.AltStat)
+    print("CommandId", hex(mbox_struct.CommandId), mbox_struct.CommandId)
+    print("Data" if mbox_struct.CmdOrRspns == 0 else "Status", mbox_struct.StatOrDta)
+
+    if mbox_struct.CommandId in CommandMap:
+        print("Command name: ", CommandMap[mbox_struct.CommandId][0])
+        print("Command Description:", CommandMap[mbox_struct.CommandId][1])

@@ -85,8 +85,8 @@ def show_shifting_bits(number: int, left_shift: int, right_shift: int):
 
 if __name__ == "__main__":
     number = int(argv[1], 0)
-    if not (-(2**31) <= number < 2**31):
-        raise ValueError("The number must be a 32-bit signed integer.")
+    if not (-(2**31) <= number < 2**32):
+        raise ValueError("The number must be a 32-bit integer.")
     shift_left = int(argv[2], 0)
     shift_right = int(argv[3], 0)
     show_shifting_bits(number, shift_left, shift_right)

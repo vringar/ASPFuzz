@@ -40,7 +40,7 @@ use libasp::{
         get_run_conf,
         write_catcher::{WriteCatcherFeedback, WriteCatcherObserver},
     },
-    CustomMetadataFeedback, ExceptionFeedback, RegisterMetadata,
+    read_mailbox_value, CustomMetadataFeedback, ExceptionFeedback, MiscMetadata, RegisterMetadata,
 };
 use rangemap::RangeMap;
 
@@ -151,7 +151,14 @@ pub fn fuzz() -> Result<(), Error> {
             log::error!("Starting QEMU");
             unsafe {
                 let res = emulator.qemu().run();
+                // TODO: Figure out how do do this in an observer
+                // Doing this in an EmulatorModule results in a read after the snapshot has been restored
                 state.metadata_map_mut().insert(RegisterMetadata::new(qemu));
+                state.add_metadata(MiscMetadata {
+                    mailbox_values: read_mailbox_value(&qemu.cpu_from_index(0))
+                        .expect("Failed to read mailbox"),
+                });
+
                 match res {
                     Ok(QemuExitReason::Breakpoint(_)) => {} // continue execution, nothing to do there.
                     Ok(QemuExitReason::Timeout) => {

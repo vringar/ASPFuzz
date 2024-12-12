@@ -1,6 +1,6 @@
 use std::ptr::addr_of_mut;
 
-use crate::{config::YAMLConfig, read_mailbox_value, MailboxValues};
+use crate::{config::YAMLConfig, MailboxValues};
 use libafl::{inputs::UsesInput, HasMetadata};
 use libafl_qemu::{
     modules::{
@@ -62,24 +62,5 @@ where
     {
         // This function gets run before the VM starts
         self.config.tunnels.setup(modules);
-    }
-
-    fn post_exec<OT, ET>(
-        &mut self,
-        emulator_modules: &mut EmulatorModules<ET, S>,
-        state: &mut S,
-        _input: &<S as UsesInput>::Input,
-        _observers: &mut OT,
-        _exit_kind: &mut libafl::prelude::ExitKind,
-    ) where
-        OT: libafl::prelude::ObserversTuple<<S as UsesInput>::Input, S>,
-        ET: EmulatorModuleTuple<S>,
-    {
-        if self.config.input.has_mailbox() {
-            state.add_metadata(MiscMetadata {
-                mailbox_values: read_mailbox_value(&emulator_modules.qemu().cpu_from_index(0))
-                    .expect("Failed to read mailbox"),
-            });
-        }
     }
 }

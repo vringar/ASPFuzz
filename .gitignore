@@ -7,3 +7,5 @@ target
 fuzzer.txt
 file_list.txt
 *.log
+debug/
+__pycache__/
