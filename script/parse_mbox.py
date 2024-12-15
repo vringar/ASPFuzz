@@ -7,8 +7,6 @@ import ctypes
 import struct
 import sys
 
-assert len(sys.argv) == 2, "Please pass an argument"
-
 
 # uint32_t:16	Status/Data
 # uint32_t:8	Command ID
@@ -144,6 +142,7 @@ def parse_mailbox(mbox_value):
 
 
 if __name__ == "__main__":
+    assert len(sys.argv) == 2, "Please pass an argument"
     mbox_struct = parse_mailbox(int(sys.argv[1], 0))
     print("CmdOrRspns", "Command" if mbox_struct.CmdOrRspns == 0 else "Response")
     if mbox_struct.Recovery:

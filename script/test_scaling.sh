@@ -36,7 +36,7 @@ for ((i=0; i<=upper_core_count; i++)); do
     awk '/ASPFuzz/ { total +=  $7 } END { print "\"PSS\":", total, "," }' "smem$i.txt"
     pkill -9 aspfuzz
     wait # for cargo make run to finish
-    awk '/GLOBAL/ { last = $0 } END { match(last, /exec\/sec: ([0-9.]+k?)/, exec); match(last, /clients: ([0-9]+)/, clients); print "\"Executions/sec\":", exec[1], ",\"Clients\":", clients[1] }' fuzzer.log
+    awk '/GLOBAL/ { last = $0 } END { match(last, /exec\/sec: ([0-9.]+k?)/, exec); match(last, /clients: ([0-9]+)/, clients); print "\"Executions/sec\":", exec[1], ",\"Clients\":", clients[1] }' fuzzer$i.log
     # Close JSON object, add comma unless it's the last iteration
     if (( i < upper_core_count )); then
         echo "  },"

@@ -1,6 +1,7 @@
 from collections import defaultdict
 from pathlib import Path
 import json
+from argparse import ArgumentParser
 
 test_dir = "test"
 # Check if a different test dir was passed as argument
@@ -10,15 +11,42 @@ sys.path.append(str(Path(__file__).parent))
 
 from parse_mbox import parse_mailbox
 
-valuable_crashes = False
-if len(sys.argv) > 1:
-    test_dir = sys.argv[1]
-if len(sys.argv) > 2:
-    # We want to get the list of valuable crashes
-    valuable_crashes = True
-# Path to the directory containing your .<hash>.metadata files
-directory_path = Path(__file__).parents[1] / "amd_sp" / "runs" / test_dir / "solutions"
-if not valuable_crashes:
+
+def extract_command(actual_data: Path):
+    # This is not correct for arbitrary run configs but works for mine
+    with actual_data.open("rb") as f:
+        data = f.read()
+    data = data[4:]
+    return parse_mailbox(int.from_bytes(data[:4], "little"))
+
+
+parser = ArgumentParser(description="Plot libafl log file")
+parser.add_argument(
+    "test_dir",
+    type=str,
+    help="Path to the run to analyze",
+)
+group = parser.add_mutually_exclusive_group()
+group.add_argument(
+    "-l",
+    "--file_list",
+    action="store_true",
+    required=False,
+    help="Should we geenrate a rsync transfer list",
+)
+group.add_argument(
+    "-b",
+    "--binary",
+    action="store_true",
+    required=False,
+    help="Also parse the associated input files to get initial values",
+)
+args = parser.parse_args()
+# Path to the directory containing youre solutions
+directory_path = (
+    Path(__file__).parents[1] / "amd_sp" / "runs" / args.test_dir / "solutions"
+)
+if not args:
     print(f"Looking for metadata files in {directory_path}")
 
 write_locations = defaultdict(lambda: defaultdict(set))
@@ -52,13 +80,16 @@ for file_path in directory_path.glob(".*.metadata"):
             if read_caught is not None:
                 read_location, read_pc = read_caught
                 read_locations[read_pc][read_location].add(actual_data)
+            # Document all successful commands
             if write_caught is not None or read_caught is not None:
-                misc_meta = meta_map.get(
-                    "libasp::emulator_module::MiscMetadata", [None, None]
-                )[1]
-                if misc_meta is not None:
-                    mailbox_meta = misc_meta.get("mailbox_values")
-                    crashing_commands.add(parse_mailbox(mailbox_meta["mbox"]).CommandId)
+                if args.binary:
+                    command = extract_command(actual_data)
+                    misc_meta = meta_map.get(
+                        "libasp::emulator_module::MiscMetadata", [None, None]
+                    )[1]
+                    if misc_meta is not None:
+                        mailbox_meta = misc_meta.get("mailbox_values")
+                        crashing_commands.add(hex(command.CommandId))
 
             exception_meta = meta_map.get(
                 "libasp::exception_handler::ExceptionHandlerMetadata", [None, None]
@@ -75,7 +106,7 @@ for file_path in directory_path.glob(".*.metadata"):
         )
 # python ./script/metadata_classifier.py tompute true > file_list.txt
 # rsync -av -e ssh --files-from=file_list.txt amd_sp/runs/tompute/solutions tompute:~/projects/ASPFuzz/amd_sp/bins/seed
-if valuable_crashes:
+if args.file_list:
     for per_write_location in write_locations.values():
         for entries in per_write_location.values():
             for entry in entries:
@@ -104,5 +135,5 @@ for exception, per_lr in exceptions.items():
         print(
             f"Exception: \t {exception} \t LR: {lr}\t count: {len(entries)}\t Exemplar: {entries.pop()}"
         )
-
-print(f"Crashing commands: {crashing_commands}")
+if args.binary:
+    print(f"Crashing commands: {crashing_commands}")
