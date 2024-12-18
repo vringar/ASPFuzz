@@ -13,7 +13,7 @@ use libafl_qemu::{
 };
 use serde::Deserialize;
 
-use super::write_catcher::WriteCatcherConfig;
+use super::access_observer::AccessObserverConfig;
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct NoExecConfig {
@@ -43,7 +43,7 @@ pub struct MmapConfig {
 pub struct CrashConfig {
     breakpoints: Vec<GuestAddr>,
     mmap: MmapConfig,
-    pub x86: Option<WriteCatcherConfig>,
+    pub x86: Option<AccessObserverConfig>,
 }
 
 /// This can't be actual metadata because we are setting it

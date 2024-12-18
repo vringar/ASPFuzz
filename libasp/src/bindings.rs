@@ -14,11 +14,11 @@ use serde::{Deserialize, Serialize};
 extern "C" {
     fn aspfuzz_write_smn_flash(addr: hwaddr, len: hwaddr, buf: *mut u8);
     fn aspfuzz_x86_write(addr: hwaddr, buf: *mut u8, len: hwaddr) -> i32;
-    fn aspfuzz_write_catcher_activate(addr: hwaddr, size: hwaddr) -> i32;
-    fn aspfuzz_write_catcher_reset() -> i32;
+    fn aspfuzz_access_observer_activate(addr: hwaddr, size: hwaddr) -> i32;
+    fn aspfuzz_access_observer_reset() -> i32;
     /// This is a little tricky to use because we will always just write back
     /// the value in our current struct, so we need to treat 0 as a special case
-    fn aspfuzz_write_catcher_status(get_read: bool, addr: *mut hwaddr, pc: *mut vaddr) -> i32;
+    fn aspfuzz_access_observer_status(get_read: bool, addr: *mut hwaddr, pc: *mut vaddr) -> i32;
 }
 /// # Safety
 /// This function should only be called if QEMU has been fully initialized
@@ -84,20 +84,20 @@ pub fn read_mailbox_value(cpu: &CPU) -> Result<MailboxValues, Error> {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct WriteCatcher {}
+pub struct AccessObserver {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WriteCatcherMetadata {
+pub struct AccessObserverMetadata {
     pub caught_read: Option<(hwaddr, vaddr)>,
     pub caught_write: Option<(hwaddr, vaddr)>,
 }
 
-impl_serdeany!(WriteCatcherMetadata);
-impl WriteCatcher {
-    pub fn write_catcher_activate(&self, addr: hwaddr, size: hwaddr) -> Result<(), Error> {
+impl_serdeany!(AccessObserverMetadata);
+impl AccessObserver {
+    pub fn activate(&self, addr: hwaddr, size: hwaddr) -> Result<(), Error> {
         let rc;
         unsafe {
-            rc = aspfuzz_write_catcher_activate(addr, size);
+            rc = aspfuzz_access_observer_activate(addr, size);
         }
         if rc == 0 {
             Ok(())
@@ -105,10 +105,10 @@ impl WriteCatcher {
             Err(Error::illegal_state("Failed to activate write catcher"))
         }
     }
-    pub fn write_catcher_reset(&self) -> Result<(), Error> {
+    pub fn reset(&self) -> Result<(), Error> {
         let rc;
         unsafe {
-            rc = aspfuzz_write_catcher_reset();
+            rc = aspfuzz_access_observer_reset();
         }
         if rc == 0 {
             Ok(())
@@ -117,13 +117,13 @@ impl WriteCatcher {
         }
     }
 
-    pub fn write_catcher_status(&self) -> Result<WriteCatcherMetadata, Error> {
+    pub fn status(&self) -> Result<AccessObserverMetadata, Error> {
         let accessor = |is_read: bool| -> Result<Option<(_, _)>, Error> {
             let mut addr: hwaddr = 0;
             let mut pc = 0;
             let rc;
             unsafe {
-                rc = aspfuzz_write_catcher_status(is_read, &mut addr, &mut pc);
+                rc = aspfuzz_access_observer_status(is_read, &mut addr, &mut pc);
             }
             if rc != 0 {
                 return Err(Error::illegal_state("Failed to get read catcher status"));
@@ -137,7 +137,7 @@ impl WriteCatcher {
         let read = accessor(true)?;
         let write = accessor(false)?;
 
-        Ok(WriteCatcherMetadata {
+        Ok(AccessObserverMetadata {
             caught_read: read,
             caught_write: write,
         })

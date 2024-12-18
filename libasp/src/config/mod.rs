@@ -10,7 +10,7 @@ use input::InputConfig;
 pub mod crash;
 use crash::{CrashConfig, CrashModule};
 
-pub mod write_catcher;
+pub mod access_observer;
 
 use crate::reset_state::ResetLevel;
 use crate::{ExceptionModule, LibAspModule};
@@ -202,6 +202,6 @@ mod tests {
     fn read_mailbox() {
         let d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         println!("CARGO PATH IS {}", d.display());
-        YAMLConfig::new(&d.join("../amd_sp/yaml/mailbox.yaml"));
+        YAMLConfig::new(&d.join("../amd_sp/yaml/mailbox_zen2_experimental.yaml"));
     }
 }

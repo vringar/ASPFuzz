@@ -122,6 +122,10 @@ pub fn parse_args() -> Vec<String> {
         &conf.flash.base.display()
     );
     qemu_args += &format![" -bios {}/{}", project_dir, &conf.flash.base.display()];
+    // As the access observer degrades emulation acccuracy and performance, only enable it if required
+    if conf.crashes.x86.is_some() {
+        qemu_args += " -global driver=amd_psp.x86.mapper,property=use_access_observer,value=true";
+    }
     log::debug!("Full QEMU arguments: {:?}", qemu_args);
     shlex::Shlex::new(&qemu_args).collect::<Vec<String>>()
 }

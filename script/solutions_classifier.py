@@ -66,13 +66,13 @@ for file_path in directory_path.glob(".*.metadata"):
             first_hash = first_hash.split("-")[0]
             actual_data = directory_path / first_hash
             data = json.load(f)
-            # Navigate to the WriteCatcherMetadata array and check if 'caught_write' is not null
+            # Navigate to the AccessObserverMetadata array and check if 'caught_write' is not null
             meta_map = data.get("metadata", {}).get("map", {})
-            write_catcher = meta_map.get(
-                "libasp::bindings::WriteCatcherMetadata", [None, None]
+            access_observer = meta_map.get(
+                "libasp::bindings::AccessObserverMetadata", [None, None]
             )[1]
-            write_caught = write_catcher.get("caught_write")
-            read_caught = write_catcher.get("caught_read")
+            write_caught = access_observer.get("caught_write")
+            read_caught = access_observer.get("caught_read")
 
             if write_caught is not None:
                 write_location, write_pc = write_caught

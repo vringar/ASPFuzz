@@ -37,8 +37,8 @@ use libafl_qemu::{
 use libafl_targets::{edges_map_mut_ptr, EDGES_MAP_DEFAULT_SIZE, MAX_EDGES_FOUND};
 use libasp::{
     config::{
+        access_observer::{AccessObserverFeedback, AccessObserverObserver},
         get_run_conf,
-        write_catcher::{WriteCatcherFeedback, WriteCatcherObserver},
     },
     read_mailbox_value, CustomMetadataFeedback, ExceptionFeedback, MiscMetadata, RegisterMetadata,
 };
@@ -207,8 +207,7 @@ pub fn fuzz() -> Result<(), Error> {
             // Create an observation channel to keep track of the execution time
             let time_observer = TimeObserver::new("time");
             let time_feedback = TimeFeedback::new(&time_observer);
-            let write_catcher_observer =
-                WriteCatcherObserver::new(conf.yaml_config.crashes.x86.clone());
+            let access_observer = AccessObserverObserver::new(conf.yaml_config.crashes.x86.clone());
 
             // Feedback to rate the interestingness of an input
             // This one is composed by two Feedbacks in OR
@@ -222,7 +221,7 @@ pub fn fuzz() -> Result<(), Error> {
             // A feedback to choose if an input is a solution or not
             let mut objective = feedback_or_fast!(
                 feedback_or!(
-                    WriteCatcherFeedback::new(&write_catcher_observer),
+                    AccessObserverFeedback::new(&access_observer),
                     feedback_and_fast!(
                         feedback_or_fast!(CrashFeedback::new(), ExceptionFeedback::default()),
                         // Only report those crashes that resulted in new coverage
@@ -264,7 +263,7 @@ pub fn fuzz() -> Result<(), Error> {
             let mut executor = QemuExecutor::new(
                 emulator,
                 &mut harness,
-                tuple_list!(edges_observer, time_observer, write_catcher_observer),
+                tuple_list!(edges_observer, time_observer, access_observer),
                 &mut fuzzer,
                 &mut state,
                 &mut mgr,
