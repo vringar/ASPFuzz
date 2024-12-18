@@ -35,7 +35,7 @@ while true; do
         echo "Blocked reentrant IO"
     fi
     counter=$((counter + 1))
-    echo -ne "$counter Folder contain $item_count files \n"
-    python ./script/metadata_classifier.py $TEST_NAME
+    echo -ne "$counter Folder contains $item_count files \n"
+    python ./script/solutions_classifier.py -b $TEST_NAME
     sleep 5
 done
