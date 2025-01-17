@@ -8,22 +8,19 @@ Fuzzing the AMD Secure Processors ROM bootloader with LibAFL using QEMU full-sys
 flowchart LR;
 
 VanillaQemu["Vanilla QEMU"];
-PSPQemu["AMD SP QEMU"];
 LibAFLQemu["LibAFL QEMU"];
-LibAFLPSPQemu{{"qemu-libafl-asp\n(with patches)"}};
+ASPQEMU["ASP-QEMU"];
 
 VanillaLibAFL["Vanilla LibAFL"];
-ASPLibAFL{{"LibAFL fork\n(with patches)"}};
+ASPLibAFL["LibAFL that references ASP QEMU"];
 
 ASPFuzz{{"ASPFuzz"}};
 
-VanillaQemu --> PSPQemu;
-PSPQemu --> LibAFLPSPQemu;
 VanillaQemu --> LibAFLQemu;
-LibAFLQemu --> LibAFLPSPQemu;
-LibAFLPSPQemu -.-> ASPFuzz;
+LibAFLQemu --> ASPQEMU;
+ASPQEMU -.-> ASPLibAFL;
 
-VanillaLibAFL --> ASPLibAFL;
+VanillaLibAFL --> ASPLibAFL
 ASPLibAFL -.-> ASPFuzz;
 ```
 

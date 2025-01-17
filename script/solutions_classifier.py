@@ -17,7 +17,11 @@ def extract_command(actual_data: Path):
     with actual_data.open("rb") as f:
         data = f.read()
     data = data[4:]
-    return parse_mailbox(int.from_bytes(data[:4], "little"))
+    return (
+        parse_mailbox(int.from_bytes(data[:4], "little")),
+        int.from_bytes(data[4:8], "little"),
+        int.from_bytes(data[8:12], "little"),
+    )
 
 
 parser = ArgumentParser(description="Plot libafl log file")
@@ -55,7 +59,7 @@ read_locations = defaultdict(lambda: defaultdict(set))
 exceptions = defaultdict(lambda: defaultdict(set))
 
 crashing_commands = set()
-
+ptr_set = set()
 # Iterate over all files that match the .<hash>.metadata pattern
 for file_path in directory_path.glob(".*.metadata"):
     try:
@@ -71,26 +75,31 @@ for file_path in directory_path.glob(".*.metadata"):
             access_observer = meta_map.get(
                 "libasp::bindings::AccessObserverMetadata", [None, None]
             )[1]
+            if access_observer is None:
+                # Fallback for older results
+                access_observer = meta_map.get(
+                    "libasp::bindings::WriteCatcherMetadata", [None, None]
+                )[1]
+
             write_caught = access_observer.get("caught_write")
             read_caught = access_observer.get("caught_read")
 
             if write_caught is not None:
                 write_location, write_pc = write_caught
-                write_locations[write_pc][write_location].add(actual_data)
+                if args.binary:
+                    (command, upper, lower) = extract_command(actual_data)
+                    crashing_commands.add(hex(command.CommandId))
+                    write_locations[write_pc][command.CommandId].add(actual_data)
+                else:
+                    write_locations[write_pc][write_location].add(actual_data)
             if read_caught is not None:
                 read_location, read_pc = read_caught
-                read_locations[read_pc][read_location].add(actual_data)
-            # Document all successful commands
-            if write_caught is not None or read_caught is not None:
                 if args.binary:
-                    command = extract_command(actual_data)
-                    misc_meta = meta_map.get(
-                        "libasp::emulator_module::MiscMetadata", [None, None]
-                    )[1]
-                    if misc_meta is not None:
-                        mailbox_meta = misc_meta.get("mailbox_values")
-                        crashing_commands.add(hex(command.CommandId))
-
+                    (command, upper, lower) = extract_command(actual_data)
+                    crashing_commands.add(hex(command.CommandId))
+                    read_locations[read_pc][command.CommandId].add(actual_data)
+                else:
+                    read_locations[read_pc][read_location].add(actual_data)
             exception_meta = meta_map.get(
                 "libasp::exception_handler::ExceptionHandlerMetadata", [None, None]
             )[1]
@@ -100,6 +109,30 @@ for file_path in directory_path.glob(".*.metadata"):
                     exceptions[exception_type][exception_meta["registers"]["lr"]].add(
                         actual_data
                     )
+                    if args.binary:
+                        (command, upper, lower) = extract_command(actual_data)
+                        assert command.CommandId == 0x5
+                    misc_meta = meta_map.get(
+                        "libasp::emulator_module::MiscMetadata", [None, None]
+                    )[1]
+                    if misc_meta is not None:
+                        mailbox_meta = misc_meta.get("mailbox_values")
+                        full_ptr = mailbox_meta["ptr_lower"]
+                        full_ptr |= mailbox_meta["ptr_higher"] << 32
+                        # DATAB is actually triggered by unaligned access
+                        assert full_ptr % 4 != 0
+                        ptr_set.add(full_ptr & 0xF)
+
+            # Document all successful commands
+            if args.binary:
+                if (
+                    write_caught is not None
+                    or read_caught is not None
+                    or exception_meta is not None
+                ):
+                    (command, upper, lower) = extract_command(actual_data)
+                    crashing_commands.add(hex(command.CommandId))
+
     except (json.JSONDecodeError, KeyError, IndexError, AttributeError) as e:
         print(
             f"Could not process {file_path}, possibly due to malformed JSON or unexpected structure. error: {e}"
@@ -121,13 +154,13 @@ if args.file_list:
 for pc, per_write_loc in write_locations.items():
     for write_loc, entries in per_write_loc.items():
         print(
-            f"PC: {hex(pc)}\t Write location: \t {hex(write_loc)}\t count: {len(entries)}\t Exemplar: {entries.pop()}"
+            f"Write \t PC: {hex(pc)}\t {"Location" if not args.binary else "CommandID"}: \t {hex(write_loc)}\t count: {len(entries)}\t Exemplar: {entries.pop()}"
         )
 
 for pc, per_read_loc in read_locations.items():
     for read_loc, entries in per_read_loc.items():
         print(
-            f"PC: {hex(pc)}\t Read location: \t {hex(read_loc)}\t count: {len(entries)}\t Exemplar: {entries.pop()}"
+            f"Read \t PC: {hex(pc)}\t {"Location" if not args.binary else "CommandID"}: \t {hex(read_loc)}\t count: {len(entries)}\t Exemplar: {entries.pop()}"
         )
 
 for exception, per_lr in exceptions.items():
@@ -137,3 +170,4 @@ for exception, per_lr in exceptions.items():
         )
 if args.binary:
     print(f"Crashing commands: {crashing_commands}")
+    print(f"Last bytes for all pointers in DATAB: {[bin(x) for x in sorted(ptr_set)]}")

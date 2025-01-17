@@ -131,7 +131,7 @@ pub fn fuzz() -> Result<(), Error> {
 
             // emu.save_snapshot("start", true);
 
-            let snap = qemu.create_fast_snapshot(true);
+            let snap = emulator.create_fast_snapshot(true);
             log::error!("Snapshot created");
             // The wrapped harness function, calling out to the LLVM-style harness
             let mut harness = |emulator: &mut Emulator<_, _, _, MyState, _>,
@@ -188,7 +188,6 @@ pub fn fuzz() -> Result<(), Error> {
                         ExitKind::Crash
                     };
                     log::error!("Harness done with exit code {ret:?}");
-                    // Restore snapshots first so that observers (which are run after the harness) can see the correct state
                     // OPTION 1: restore only the CPU state (registers et. al)
                     // for (i, s) in saved_cpu_states.iter().enumerate() {
                     //     emu.cpu_from_index(i).restore_state(s);
@@ -198,8 +197,7 @@ pub fn fuzz() -> Result<(), Error> {
                     // emu.load_snapshot("start", true);
 
                     // OPTION 3: restore a fast devices+mem snapshot
-                    qemu.restore_fast_snapshot(snap);
-
+                    emulator.restore_fast_snapshot(snap);
                     ret
                 }
             };

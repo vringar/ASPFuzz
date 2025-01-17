@@ -46,9 +46,6 @@ tunnels:
   - addr: 0xfca
     action: LogRegister
     target: R5
-  - addr: 0x1048
-    action: LogRegister
-    target: R1
   - addr: 0x907a
     action: LogMemory
     target: 0x3010570
