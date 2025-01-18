@@ -2,10 +2,10 @@ use libafl::prelude::*;
 /// Catching and handling ARM CPU exceptions durign the test-case execution
 use libafl_qemu::{
     modules::{
-        EmulatorModule, EmulatorModuleTuple, NopAddressFilter, NopPageFilter, NOP_ADDRESS_FILTER,
-        NOP_PAGE_FILTER,
+        utils::filters::{NopAddressFilter, NopPageFilter, NOP_ADDRESS_FILTER, NOP_PAGE_FILTER},
+        EmulatorModule, EmulatorModuleTuple,
     },
-    EmulatorModules, Hook, HookId, InstructionHookId,
+    EmulatorModules, Hook, HookId, InstructionHookId, Qemu,
 };
 use strum::{EnumIter, FromRepr, IntoEnumIterator};
 
@@ -53,12 +53,13 @@ impl ExceptionModule {
         }
     }
 
-    pub fn update_exception_vector_base<ET, S>(
+    pub fn update_exception_vector_base<ET, I, S>(
         &mut self,
-        emulator_modules: &mut EmulatorModules<ET, S>,
+        emulator_modules: &mut EmulatorModules<ET, I, S>,
     ) where
-        ET: EmulatorModuleTuple<S>,
-        S: UsesInput + Unpin + HasMetadata,
+        ET: EmulatorModuleTuple<I, S>,
+        S: Unpin + HasMetadata,
+        I: Unpin,
     {
         for &hook_id in &self.hook_ids {
             hook_id.remove(true);
@@ -74,15 +75,18 @@ impl ExceptionModule {
             emulator_modules.instructions(
                 exception_addr,
                 Hook::Closure(Box::new(
-                    move |hks: &mut EmulatorModules<ET, S>, state: Option<&mut S>, _pc| {
+                    move |qemu: Qemu,
+                          _: &mut EmulatorModules<ET, I, S>,
+                          state: Option<&mut S>,
+                          _pc| {
                         let state =
                             state.expect("State should be present when an exception is triggered");
                         let exception_meta = ExceptionHandlerMetadata {
                             triggered_exception: enum_value,
-                            registers: RegisterMetadata::new(hks.qemu()),
+                            registers: RegisterMetadata::new(qemu),
                         };
                         state.metadata_map_mut().insert(exception_meta);
-                        hks.qemu().current_cpu().unwrap().trigger_breakpoint();
+                        qemu.current_cpu().unwrap().trigger_breakpoint();
                     },
                 )),
                 true,
@@ -94,13 +98,13 @@ impl ExceptionModule {
     // However, this would be the correct way to set a hook on the vector table changing
     // Inspired by libafl_qemu/src/modules/call.rs
     // fn hook_vbar_writes<ET, S>(
-    //     emulator_modules: &mut EmulatorModules<ET, S>,
+    //     emulator_modules: &mut EmulatorModules<ET, I, S>,
     //     _state: Option<&mut S>,
     //     pc: GuestAddr,
     // ) -> Option<u64>
     // where
-    //     ET: EmulatorModuleTuple<S>,
-    //     S: UsesInput + Unpin + HasMetadata,
+    //     ET: EmulatorModuleTuple<I,S>,
+    //     S: Unpin + HasMetadata,
     // {
     //     todo!("hook_vbar_writes is not working, it freezes the emulator on startup");
     // if let Some(h) = emulator_modules.get_mut::<Self>() {
@@ -155,9 +159,10 @@ impl ExceptionModule {
     //}
 }
 
-impl<S> EmulatorModule<S> for ExceptionModule
+impl<I, S> EmulatorModule<I, S> for ExceptionModule
 where
-    S: UsesInput + Unpin + HasMetadata,
+    S: Unpin + HasMetadata,
+    I: Unpin,
 {
     type ModuleAddressFilter = NopAddressFilter;
 
@@ -179,9 +184,9 @@ where
         unsafe { addr_of_mut!(NOP_PAGE_FILTER).as_mut().unwrap().get_mut() }
     }
 
-    fn post_qemu_init<ET>(&self, _emulator_modules: &mut EmulatorModules<ET, S>)
+    fn post_qemu_init<ET>(&mut self, _qemu: Qemu, _emulator_modules: &mut EmulatorModules<ET, I, S>)
     where
-        ET: EmulatorModuleTuple<S>,
+        ET: EmulatorModuleTuple<I, S>,
     {
         // TODO: figure out why this is so slow
         // emulator_modules.blocks(
@@ -190,20 +195,25 @@ where
         //     Hook::Empty,
         // );
     }
-    fn first_exec<ET>(&mut self, emulator_modules: &mut EmulatorModules<ET, S>, _state: &mut S)
-    where
-        ET: EmulatorModuleTuple<S>,
+    fn first_exec<ET>(
+        &mut self,
+        _qemu: Qemu,
+        emulator_modules: &mut EmulatorModules<ET, I, S>,
+        _state: &mut S,
+    ) where
+        ET: EmulatorModuleTuple<I, S>,
     {
         self.update_exception_vector_base(emulator_modules)
     }
 
     fn pre_exec<ET>(
         &mut self,
-        _emulator_modules: &mut EmulatorModules<ET, S>,
+        _qemu: Qemu,
+        _emulator_modules: &mut EmulatorModules<ET, I, S>,
         state: &mut S,
-        _input: &<S as UsesInput>::Input,
+        _input: &I,
     ) where
-        ET: EmulatorModuleTuple<S>,
+        ET: EmulatorModuleTuple<I, S>,
     {
         // THIS IS REQUIRED
         let _ = state

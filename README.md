@@ -26,7 +26,7 @@ ASPLibAFL -.-> ASPFuzz;
 
 ## Requirements
 
-Install [`nix`](https://lix.systems/install/)  and use the `flake.nix` with `nix develop` to get a fully reproducible environemnt
+Install [`nix`](https://lix.systems/install/)  and use the `flake.nix` with `nix develop` to get a fully reproducible environment
 that you can easily share across machines.
 Alternatively you can install the following dependencies manually:
 

@@ -2,14 +2,14 @@
 
 use std::ptr::addr_of_mut;
 
-use libafl::{inputs::UsesInput, HasMetadata};
+use libafl::HasMetadata;
 use libafl_qemu::{
     modules::{
-        EmulatorModule, EmulatorModuleTuple, NopAddressFilter, NopPageFilter, NOP_ADDRESS_FILTER,
-        NOP_PAGE_FILTER,
+        utils::filters::{NopAddressFilter, NopPageFilter, NOP_ADDRESS_FILTER, NOP_PAGE_FILTER},
+        EmulatorModule, EmulatorModuleTuple,
     },
     sys::TCGTemp,
-    EmulatorModules, GuestAddr, Hook, MemAccessInfo, Regs,
+    EmulatorModules, GuestAddr, Hook, MemAccessInfo, Qemu, Regs,
 };
 use serde::Deserialize;
 
@@ -71,9 +71,10 @@ impl CrashModule {
     }
 }
 
-impl<S> EmulatorModule<S> for CrashModule
+impl<I, S> EmulatorModule<I, S> for CrashModule
 where
-    S: UsesInput + Unpin + HasMetadata,
+    S: Unpin + HasMetadata,
+    I: Unpin,
 {
     type ModuleAddressFilter = NopAddressFilter;
 
@@ -95,12 +96,12 @@ where
         unsafe { addr_of_mut!(NOP_PAGE_FILTER).as_mut().unwrap().get_mut() }
     }
 
-    fn post_qemu_init<ET>(&self, modules: &mut EmulatorModules<ET, S>)
+    fn post_qemu_init<ET>(&mut self, qemu: Qemu, modules: &mut EmulatorModules<ET, I, S>)
     where
-        ET: EmulatorModuleTuple<S>,
+        ET: EmulatorModuleTuple<I, S>,
     {
         self.c.breakpoints.iter().for_each(|bp| {
-            modules.qemu().set_breakpoint(*bp);
+            qemu.set_breakpoint(*bp);
         });
         // Block hooks and write hooks for crash detection
         modules.blocks(
@@ -124,14 +125,16 @@ where
     }
 }
 
-fn gen_block_hook<ET, S>(
-    modules: &mut EmulatorModules<ET, S>,
+fn gen_block_hook<ET, I, S>(
+    qemu: Qemu,
+    modules: &mut EmulatorModules<ET, I, S>,
     _state: Option<&mut S>,
     src: GuestAddr,
 ) -> Option<u64>
 where
-    S: UsesInput + Unpin + HasMetadata,
-    ET: EmulatorModuleTuple<S>,
+    S: Unpin + HasMetadata,
+    ET: EmulatorModuleTuple<I, S>,
+    I: Unpin,
 {
     let module: &mut CrashModule = modules
         .modules_mut()
@@ -145,7 +148,7 @@ where
             log::debug!("Generate block:");
             log::debug!("> src: {:#x}", src);
             log::debug!("> id: {:#x}", id);
-            modules.qemu().current_cpu().unwrap().trigger_breakpoint();
+            qemu.current_cpu().unwrap().trigger_breakpoint();
             return Some(id);
         }
     }
@@ -157,12 +160,16 @@ where
     }
     None
 }
-fn exec_block_hook<ET, S>(modules: &mut EmulatorModules<ET, S>, _state: Option<&mut S>, id: u64)
-where
-    S: UsesInput + Unpin + HasMetadata,
-    ET: EmulatorModuleTuple<S>,
+fn exec_block_hook<ET, I, S>(
+    qemu: Qemu,
+    modules: &mut EmulatorModules<ET, I, S>,
+    _state: Option<&mut S>,
+    id: u64,
+) where
+    S: Unpin + HasMetadata,
+    ET: EmulatorModuleTuple<I, S>,
+    I: Unpin,
 {
-    let emu = modules.qemu();
     let module: &CrashModule = modules
         .modules()
         .match_first_type()
@@ -170,10 +177,10 @@ where
     if !module.r.ccp_memcopy_id == id {
         log::debug!("Execute block: id: {id}");
         // log::debug!("> data: {}", (todo!() as u32));
-        emu.current_cpu().unwrap().trigger_breakpoint();
+        qemu.current_cpu().unwrap().trigger_breakpoint();
         return;
     }
-    let cpu = emu.current_cpu().unwrap();
+    let cpu = qemu.current_cpu().unwrap();
     let pc = cpu.read_reg(Regs::Pc).unwrap();
     assert_eq!(pc as GuestAddr, module.c.mmap.ccp_memcopy_addr);
     let cpy_src: GuestAddr = cpu.read_reg(Regs::R0).unwrap();
@@ -204,16 +211,18 @@ where
     }
 }
 
-fn gen_writes_hook<ET, S>(
-    modules: &mut EmulatorModules<ET, S>,
+fn gen_writes_hook<ET, I, S>(
+    _qemu: Qemu,
+    modules: &mut EmulatorModules<ET, I, S>,
     _state: Option<&mut S>,
     pc: GuestAddr,
     _: *mut TCGTemp,
     mem_acces_info: MemAccessInfo,
 ) -> Option<u64>
 where
-    S: UsesInput + Unpin + HasMetadata,
-    ET: EmulatorModuleTuple<S>,
+    S: Unpin + HasMetadata,
+    ET: EmulatorModuleTuple<I, S>,
+    I: Unpin,
 {
     let module: &mut CrashModule = modules
         .modules_mut()
@@ -241,14 +250,16 @@ where
     Some(hook_id)
 }
 
-fn exec_writes_hook<ET, S>(
-    modules: &mut EmulatorModules<ET, S>,
+fn exec_writes_hook<ET, I, S>(
+    qemu: Qemu,
+    modules: &mut EmulatorModules<ET, I, S>,
     _state: Option<&mut S>,
     id: u64,
     addr: GuestAddr,
 ) where
-    S: UsesInput + Unpin + HasMetadata,
-    ET: EmulatorModuleTuple<S>,
+    S: Unpin + HasMetadata,
+    ET: EmulatorModuleTuple<I, S>,
+    I: Unpin,
 {
     let module: &CrashModule = modules
         .modules()
@@ -258,13 +269,13 @@ fn exec_writes_hook<ET, S>(
         if addr >= begin && addr < end {
             log::debug!("Execute writes: id: {id:#x} addr: {addr:#x}");
             // log::debug!("> data: {}", todo!() as u64);
-            let emu = modules.qemu();
-            emu.current_cpu().unwrap().trigger_breakpoint();
+            qemu.current_cpu().unwrap().trigger_breakpoint();
         }
     }
 }
-fn exec_writes_hook_n<ET: EmulatorModuleTuple<S>, S: UsesInput>(
-    modules: &mut EmulatorModules<ET, S>,
+fn exec_writes_hook_n<I: Unpin, ET: EmulatorModuleTuple<I, S>, S>(
+    qemu: Qemu,
+    modules: &mut EmulatorModules<ET, I, S>,
     _input: Option<&mut S>,
     id: u64,
     addr: u32,
@@ -278,7 +289,7 @@ fn exec_writes_hook_n<ET: EmulatorModuleTuple<S>, S: UsesInput>(
         if addr >= no_write.begin && addr < no_write.end {
             log::debug!("Execute writes: id: {id:#x}, addr: {addr:#x}, size: {size}");
             // log::debug!("> data: {}", (todo!() as u32));
-            modules.qemu().current_cpu().unwrap().trigger_breakpoint();
+            qemu.current_cpu().unwrap().trigger_breakpoint();
         }
     }
 }

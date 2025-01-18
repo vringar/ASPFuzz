@@ -1,6 +1,5 @@
 use std::fmt;
 
-use libafl::inputs::UsesInput;
 use libafl_qemu::*;
 use log;
 use serde::{
@@ -53,10 +52,11 @@ pub struct TunnelConfig {
 }
 
 impl TunnelConfig {
-    pub fn setup<ET, S>(&self, emu_modules: &mut EmulatorModules<ET, S>)
+    pub fn setup<ET, I, S>(&self, emu_modules: &mut EmulatorModules<ET, I, S>)
     where
         ET: Unpin,
-        S: UsesInput + Unpin,
+        S: Unpin,
+        I: Unpin,
     {
         for TunnelActions {
             addr,
@@ -67,14 +67,14 @@ impl TunnelConfig {
                 CmpAction::SetConstant { target, value } => emu_modules.instructions(
                     addr,
                     Hook::Closure(Box::new(
-                        move |hks: &mut EmulatorModules<ET, S>, _state, _pc| {
+                        move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
                             log::debug!(
                                 "Tunnel - Constant [{:#x}, {:?}, {:#x}]",
                                 addr,
                                 target,
                                 value
                             );
-                            hks.qemu().write_reg(target, value).unwrap();
+                            qemu.write_reg(target, value).unwrap();
                         },
                     )),
                     false,
@@ -82,7 +82,7 @@ impl TunnelConfig {
                 CmpAction::CopyRegister { target, source } => emu_modules.instructions(
                     addr,
                     Hook::Closure(Box::new(
-                        move |hks: &mut EmulatorModules<ET, S>, _state, _pc| {
+                        move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
                             log::debug!(
                                 "Tunnel - Register [{:#x}, {:?}, {:?}]",
                                 addr,
@@ -90,8 +90,8 @@ impl TunnelConfig {
                                 source
                             );
 
-                            let value: u32 = hks.qemu().read_reg(source).unwrap();
-                            hks.qemu().write_reg(target, value).unwrap();
+                            let value: u32 = qemu.read_reg(source).unwrap();
+                            qemu.write_reg(target, value).unwrap();
                         },
                     )),
                     false,
@@ -99,15 +99,14 @@ impl TunnelConfig {
                 CmpAction::Jump { source, target } => emu_modules.instructions(
                     addr,
                     Hook::Closure(Box::new(
-                        move |hks: &mut EmulatorModules<ET, S>, _state, _pc| {
+                        move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
                             log::info!("Tunnel - Jump [{:#x},{:#x}, {:#x}]", addr, source, target);
                             let inst: [u8; 2] = generate_branch_call(source, target);
                             // Patch the instruction by overwriting it
-                            hks.qemu()
-                                .write_mem(source, &inst)
+                            qemu.write_mem(source, &inst)
                                 .expect("Overwriting instruction failed");
 
-                            hks.qemu().flush_jit();
+                            qemu.flush_jit();
                         },
                     )),
                     true,
@@ -115,8 +114,8 @@ impl TunnelConfig {
                 CmpAction::LogRegister { target } => emu_modules.instructions(
                     addr,
                     Hook::Closure(Box::new(
-                        move |hks: &mut EmulatorModules<ET, S>, _state, _pc| {
-                            let value: u32 = hks.qemu().read_reg(target).unwrap();
+                        move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
+                            let value: u32 = qemu.read_reg(target).unwrap();
                             log::debug!("Tunnel - Log [{:#x}, {:?}, {:#x}]", addr, target, value);
                         },
                     )),
@@ -128,15 +127,14 @@ impl TunnelConfig {
                 } => emu_modules.instructions(
                     addr,
                     Hook::Closure(Box::new(
-                        move |hks: &mut EmulatorModules<ET, S>, _state, _pc| {
+                        move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
                             log::debug!(
                                 "Tunnel - WriteMem [{:#x}, {:#x}, {:?}]",
                                 addr,
                                 memory_addr,
                                 value
                             );
-                            hks.qemu()
-                                .write_mem(memory_addr, &value)
+                            qemu.write_mem(memory_addr, &value)
                                 .expect("WriteMem failed");
                         },
                     )),
@@ -148,10 +146,9 @@ impl TunnelConfig {
                 } => emu_modules.instructions(
                     addr,
                     Hook::Closure(Box::new(
-                        move |hks: &mut EmulatorModules<ET, S>, _state, _pc| {
+                        move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
                             let mut buf = vec![0_u8; size];
-                            hks.qemu()
-                                .read_mem(memory_addr, &mut buf)
+                            qemu.read_mem(memory_addr, &mut buf)
                                 .expect("ReadMem failed");
 
                             log::debug!(
@@ -178,7 +175,7 @@ fn generate_branch_call(cur_pc: u32, target: u32) -> [u8; 2] {
     assert!((-2048..=2046).contains(&diff));
     assert!(diff % 2 == 0);
     let mask = (1i16 << 11) - 1;
-    let inst = 0b11100 << 11 | ((diff / 2) & mask);
+    let inst = (0b11100 << 11) | ((diff / 2) & mask);
     log::info!(
         "Generating jump instruction diff: {:#x} inst: {:#x}",
         diff,

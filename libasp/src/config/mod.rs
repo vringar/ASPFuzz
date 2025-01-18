@@ -1,4 +1,3 @@
-use libafl::inputs::UsesInput;
 use libafl_bolts::tuples::{tuple_list, tuple_list_type};
 
 pub mod tunnel;
@@ -152,7 +151,7 @@ impl YAMLConfig {
         &self,
     ) -> tuple_list_type!(LibAspModule, CrashModule, ExceptionModule)
     where
-        S: UsesInput + Unpin,
+        S: Unpin,
     {
         tuple_list!(
             LibAspModule::new(self.clone()),

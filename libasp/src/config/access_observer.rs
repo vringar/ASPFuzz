@@ -2,7 +2,6 @@ use std::{borrow::Cow, collections::HashSet};
 
 use crate::{AccessObserver, AccessObserverMetadata, MiscMetadata};
 use libafl::{
-    inputs::UsesInput,
     prelude::*,
     prelude::{ExitKind, Feedback, Observer, StateInitializer},
     HasMetadata,
@@ -37,7 +36,7 @@ impl AccessObserverObserver {
 }
 impl<I, S> Observer<I, S> for AccessObserverObserver
 where
-    S: UsesInput + Unpin + HasMetadata,
+    S: Unpin + HasMetadata,
 {
     fn pre_exec(&mut self, _state: &mut S, _input: &I) -> Result<(), libafl::Error> {
         self.result = None;

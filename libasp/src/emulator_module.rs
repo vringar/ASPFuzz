@@ -1,13 +1,13 @@
 use std::ptr::addr_of_mut;
 
 use crate::{config::YAMLConfig, MailboxValues};
-use libafl::{inputs::UsesInput, HasMetadata};
+use libafl::HasMetadata;
 use libafl_qemu::{
     modules::{
-        EmulatorModule, EmulatorModuleTuple, NopAddressFilter, NopPageFilter, NOP_ADDRESS_FILTER,
-        NOP_PAGE_FILTER,
+        utils::filters::{NopAddressFilter, NopPageFilter, NOP_ADDRESS_FILTER, NOP_PAGE_FILTER},
+        EmulatorModule, EmulatorModuleTuple,
     },
-    EmulatorModules,
+    EmulatorModules, Qemu,
 };
 use serde::{Deserialize, Serialize};
 
@@ -32,9 +32,10 @@ pub struct MiscMetadata {
 }
 libafl_bolts::impl_serdeany!(MiscMetadata);
 
-impl<S> EmulatorModule<S> for LibAspModule
+impl<I, S> EmulatorModule<I, S> for LibAspModule
 where
-    S: UsesInput + Unpin + HasMetadata,
+    S: Unpin + HasMetadata,
+    I: Unpin,
 {
     type ModuleAddressFilter = NopAddressFilter;
 
@@ -56,9 +57,9 @@ where
         unsafe { addr_of_mut!(NOP_PAGE_FILTER).as_mut().unwrap().get_mut() }
     }
 
-    fn post_qemu_init<ET>(&self, modules: &mut EmulatorModules<ET, S>)
+    fn post_qemu_init<ET>(&mut self, _qemu: Qemu, modules: &mut EmulatorModules<ET, I, S>)
     where
-        ET: EmulatorModuleTuple<S>,
+        ET: EmulatorModuleTuple<I, S>,
     {
         // This function gets run before the VM starts
         self.config.tunnels.setup(modules);
