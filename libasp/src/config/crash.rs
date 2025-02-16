@@ -1,13 +1,8 @@
 //! This module defines multiple crash detection hooks
 
-use std::ptr::addr_of_mut;
-
 use libafl::HasMetadata;
 use libafl_qemu::{
-    modules::{
-        utils::filters::{NopAddressFilter, NopPageFilter, NOP_ADDRESS_FILTER, NOP_PAGE_FILTER},
-        EmulatorModule, EmulatorModuleTuple,
-    },
+    modules::{EmulatorModule, EmulatorModuleTuple},
     sys::TCGTemp,
     EmulatorModules, GuestAddr, Hook, MemAccessInfo, Qemu, Regs,
 };
@@ -76,26 +71,6 @@ where
     S: Unpin + HasMetadata,
     I: Unpin,
 {
-    type ModuleAddressFilter = NopAddressFilter;
-
-    type ModulePageFilter = NopPageFilter;
-
-    fn address_filter(&self) -> &Self::ModuleAddressFilter {
-        &NopAddressFilter
-    }
-
-    fn address_filter_mut(&mut self) -> &mut Self::ModuleAddressFilter {
-        unsafe { addr_of_mut!(NOP_ADDRESS_FILTER).as_mut().unwrap().get_mut() }
-    }
-
-    fn page_filter(&self) -> &Self::ModulePageFilter {
-        &NopPageFilter
-    }
-
-    fn page_filter_mut(&mut self) -> &mut Self::ModulePageFilter {
-        unsafe { addr_of_mut!(NOP_PAGE_FILTER).as_mut().unwrap().get_mut() }
-    }
-
     fn post_qemu_init<ET>(&mut self, qemu: Qemu, modules: &mut EmulatorModules<ET, I, S>)
     where
         ET: EmulatorModuleTuple<I, S>,
@@ -254,7 +229,8 @@ fn exec_writes_hook<ET, I, S>(
     qemu: Qemu,
     modules: &mut EmulatorModules<ET, I, S>,
     _state: Option<&mut S>,
-    id: u64,
+    _id: u64,
+    pc: GuestAddr,
     addr: GuestAddr,
 ) where
     S: Unpin + HasMetadata,
@@ -267,7 +243,7 @@ fn exec_writes_hook<ET, I, S>(
         .expect("This should only run with a FlashHookConfig");
     for &ForbiddenWritesConfig { begin, end, .. } in module.c.mmap.forbidden_writes.iter() {
         if addr >= begin && addr < end {
-            log::debug!("Execute writes: id: {id:#x} addr: {addr:#x}");
+            log::debug!("Execute writes: pc: {pc:#x} addr: {addr:#x}");
             // log::debug!("> data: {}", todo!() as u64);
             qemu.current_cpu().unwrap().trigger_breakpoint();
         }
@@ -277,8 +253,9 @@ fn exec_writes_hook_n<I: Unpin, ET: EmulatorModuleTuple<I, S>, S>(
     qemu: Qemu,
     modules: &mut EmulatorModules<ET, I, S>,
     _input: Option<&mut S>,
-    id: u64,
-    addr: u32,
+    _id: u64,
+    pc: GuestAddr,
+    addr: GuestAddr,
     size: usize,
 ) {
     let module: &CrashModule = modules
@@ -287,7 +264,7 @@ fn exec_writes_hook_n<I: Unpin, ET: EmulatorModuleTuple<I, S>, S>(
         .expect("This should only run with a FlashHookConfig");
     for no_write in module.c.mmap.forbidden_writes.iter() {
         if addr >= no_write.begin && addr < no_write.end {
-            log::debug!("Execute writes: id: {id:#x}, addr: {addr:#x}, size: {size}");
+            log::debug!("Execute writes: pc: {pc:#x}, addr: {addr:#x}, size: {size}");
             // log::debug!("> data: {}", (todo!() as u32));
             qemu.current_cpu().unwrap().trigger_breakpoint();
         }

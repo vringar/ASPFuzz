@@ -1,10 +1,7 @@
 use libafl::prelude::*;
 /// Catching and handling ARM CPU exceptions durign the test-case execution
 use libafl_qemu::{
-    modules::{
-        utils::filters::{NopAddressFilter, NopPageFilter, NOP_ADDRESS_FILTER, NOP_PAGE_FILTER},
-        EmulatorModule, EmulatorModuleTuple,
-    },
+    modules::{EmulatorModule, EmulatorModuleTuple},
     EmulatorModules, Hook, HookId, InstructionHookId, Qemu,
 };
 use strum::{EnumIter, FromRepr, IntoEnumIterator};
@@ -13,7 +10,7 @@ use core::fmt::Debug;
 use libafl_bolts::Named;
 use log;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, ptr::addr_of_mut};
+use std::borrow::Cow;
 
 use crate::RegisterMetadata;
 
@@ -164,26 +161,6 @@ where
     S: Unpin + HasMetadata,
     I: Unpin,
 {
-    type ModuleAddressFilter = NopAddressFilter;
-
-    type ModulePageFilter = NopPageFilter;
-
-    fn address_filter(&self) -> &Self::ModuleAddressFilter {
-        &NopAddressFilter
-    }
-
-    fn address_filter_mut(&mut self) -> &mut Self::ModuleAddressFilter {
-        unsafe { addr_of_mut!(NOP_ADDRESS_FILTER).as_mut().unwrap().get_mut() }
-    }
-
-    fn page_filter(&self) -> &Self::ModulePageFilter {
-        &NopPageFilter
-    }
-
-    fn page_filter_mut(&mut self) -> &mut Self::ModulePageFilter {
-        unsafe { addr_of_mut!(NOP_PAGE_FILTER).as_mut().unwrap().get_mut() }
-    }
-
     fn post_qemu_init<ET>(&mut self, _qemu: Qemu, _emulator_modules: &mut EmulatorModules<ET, I, S>)
     where
         ET: EmulatorModuleTuple<I, S>,

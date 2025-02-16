@@ -20,11 +20,11 @@ libafl_targets = { workspace = true }
 
 libasp = { path = "../libasp" }
 
-serde = { version = "1.0", default-features = false, features = ["alloc"] } # serialization lib
-log = "0.4.22"
+serde = { version = "1.0.217", default-features = false, features = ["alloc"] } # serialization lib
+log = "0.4.25"
 env_logger = "0.11.5"
-nix = {version ="0.29", features = ["fs"]}
-chrono = "0.4.38"
+nix = {version ="0.29.0", features = ["fs"]}
+chrono = "0.4.39"
 rangemap = "1.5.0"
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.5.29", features = ["derive"] }
 shlex = "1.3.0"
