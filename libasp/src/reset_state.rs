@@ -2,7 +2,7 @@
 /// This module is currently unused as the built-in snapshotting has improved significantly
 use std::fmt::{Debug, Formatter};
 
-use libafl_qemu::*;
+use libafl_qemu::{sys, GuestAddr, IntoEnumIterator, Qemu, Regs};
 use log;
 use serde::Deserialize;
 use std::fs::File;
@@ -84,6 +84,7 @@ extern "C" {
 }
 
 impl ResetState {
+    #[must_use]
     pub fn new(sram_size: GuestAddr) -> Self {
         Self {
             saved: false,
@@ -205,7 +206,7 @@ impl ResetState {
 
     /* Qemu snapshot reset */
     fn load_qemu_snapshot(&self, emu: &Qemu) {
-        emu.load_snapshot("start", true)
+        emu.load_snapshot("start", true);
     }
 
     /* Hard reset */
@@ -235,7 +236,7 @@ impl ResetState {
         unsafe {
             aspfuzz_smn_slots = [0; 32];
             for (i, _) in aspfuzz_smn_slots.iter().enumerate() {
-                aspfuzz_smn_update_slot(i as u32)
+                aspfuzz_smn_update_slot(i as u32);
             }
         }
 
@@ -248,7 +249,7 @@ impl ResetState {
         emu.remove_breakpoint(self.regs[Regs::Pc as usize] as GuestAddr);
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
         let pc = cpu.read_reg(Regs::Pc).unwrap();
-        log::debug!("After CPU reset: PC={:#x}", pc);
+        log::debug!("After CPU reset: PC={pc:#x}");
     }
 
     pub fn sram_to_file(&self) {
@@ -283,7 +284,7 @@ impl Reset for ResetState {
             ResetLevel::RustSnapshot => self.save_full(emu),
             ResetLevel::QemuSnapshot => self.save_full(emu),
             ResetLevel::HardReset => self.save_full(emu),
-        };
+        }
         self.saved = true;
     }
 
@@ -294,14 +295,14 @@ impl Reset for ResetState {
             ResetLevel::RustSnapshot => self.load_rust_snapshot(emu),
             ResetLevel::QemuSnapshot => self.load_qemu_snapshot(emu),
             ResetLevel::HardReset => self.load_hard_reset(emu),
-        };
+        }
         self.num_loads += 1;
     }
 }
 
 impl Debug for ResetLevel {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let mut out_str = "".to_string();
+        let mut out_str = String::new();
         match *self {
             ResetLevel::SuperLazy => out_str.push_str("SuperLazy"),
             ResetLevel::Lazy => out_str.push_str("Lazy"),
@@ -309,7 +310,7 @@ impl Debug for ResetLevel {
             ResetLevel::QemuSnapshot => out_str.push_str("QemuSnapshot"),
             ResetLevel::HardReset => out_str.push_str("HardReset"),
         }
-        write!(f, "{}", out_str)
+        write!(f, "{out_str}")
     }
 }
 
@@ -329,7 +330,7 @@ impl FromStr for ResetLevel {
 
 impl Debug for ResetState {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let mut out_str = "".to_string();
+        let mut out_str = String::new();
 
         /* Stats to string */
         out_str.push_str(&format!(
@@ -371,8 +372,8 @@ impl Debug for ResetState {
                 break;
             }
         }
-        out_str.push_str(&format!("\tAddr first =\t{:#08X}\n", addr_first));
+        out_str.push_str(&format!("\tAddr first =\t{addr_first:#08X}\n"));
 
-        write!(f, "{}", out_str)
+        write!(f, "{out_str}")
     }
 }

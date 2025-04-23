@@ -1,5 +1,5 @@
 //! This module contains all the custom hooks
-//! that we are exposing in addition to the LibAFL accessors
+//! that we are exposing in addition to the `LibAFL` accessors
 //!
 
 use libafl::Error;
@@ -27,7 +27,7 @@ pub unsafe fn write_flash_mem(addr: GuestAddr, buf: &[u8]) {
     aspfuzz_write_smn_flash(
         addr.into(),
         buf.len().try_into().unwrap(),
-        buf.as_ptr() as *mut u8,
+        buf.as_ptr().cast_mut(),
     );
 }
 
@@ -37,7 +37,7 @@ pub fn write_x86_mem(_cpu: &CPU, addr: GuestAddr, buf: &[u8]) -> Result<(), Erro
     unsafe {
         i = aspfuzz_x86_write(
             addr.into(),
-            buf.as_ptr() as *mut u8,
+            buf.as_ptr().cast_mut(),
             buf.len().try_into().unwrap(),
         );
     }

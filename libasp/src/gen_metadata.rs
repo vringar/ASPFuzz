@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use libafl::prelude::*;
 use libafl_bolts::{impl_serdeany, Named};
 
-use libafl_qemu::*;
+use libafl_qemu::{IntoEnumIterator, Qemu, Regs};
 
 use serde::{Deserialize, Serialize};
 
@@ -42,7 +42,13 @@ impl RegisterMetadata {
         let mut regs: Vec<u32> = Vec::new();
         assert_eq!(emulator.num_cpus(), 1);
         for r in Regs::iter() {
-            regs.push(emulator.cpu_from_index(0).read_reg(r).unwrap());
+            regs.push(
+                emulator
+                    .cpu_from_index(0)
+                    .expect("We always have one CPU")
+                    .read_reg(r)
+                    .unwrap(),
+            );
         }
         Self {
             r0: format!("{:#010x}", regs[0]),

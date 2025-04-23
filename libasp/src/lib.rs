@@ -30,6 +30,7 @@ pub enum BootStage {
 }
 
 impl BootStage {
+    #[must_use]
     pub fn get_exception_vector_base(&self) -> GuestAddr {
         match self {
             BootStage::OnChipBootloader => 0x100,

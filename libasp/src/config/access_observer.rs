@@ -26,6 +26,7 @@ pub struct AccessObserverObserver {
 }
 
 impl AccessObserverObserver {
+    #[must_use]
     pub fn new(config: Option<AccessObserverConfig>) -> Self {
         Self {
             c: config,

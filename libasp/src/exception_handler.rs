@@ -42,6 +42,7 @@ impl Default for ExceptionModule {
 }
 
 impl ExceptionModule {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             hook_ids: vec![],
@@ -180,7 +181,7 @@ where
     ) where
         ET: EmulatorModuleTuple<I, S>,
     {
-        self.update_exception_vector_base(emulator_modules)
+        self.update_exception_vector_base(emulator_modules);
     }
 
     fn pre_exec<ET>(

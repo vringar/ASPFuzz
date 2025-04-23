@@ -63,7 +63,7 @@ pub fn parse_args() -> Vec<String> {
     }
     let date = Local::now();
     let run_dir = if let Some(run_dir_name) = cli_args.run_dir_name {
-        PathBuf::from(format!("runs/{}", run_dir_name))
+        PathBuf::from(format!("runs/{run_dir_name}"))
     } else {
         PathBuf::from(format!("runs/{}", date.format("%Y-%m-%d_%H:%M")))
     };
@@ -96,7 +96,7 @@ pub fn parse_args() -> Vec<String> {
 
     // Create arguments to start QEMU with
     let mut qemu_args: String = env::args().next().unwrap();
-    log::debug!("QEMU arguments: {:?}", qemu_args);
+    log::debug!("QEMU arguments: {qemu_args:?}");
     if conf.debug {
         qemu_args += " -d trace:ccp_*,trace:psp_*,guest_errors,unimp";
         qemu_args += &format![" -D {}/logs/qemu.log", run_dir.display()];
@@ -126,6 +126,6 @@ pub fn parse_args() -> Vec<String> {
     if conf.crashes.x86.is_some() {
         qemu_args += " -global driver=amd_psp.x86.mapper,property=use_access_observer,value=true";
     }
-    log::debug!("Full QEMU arguments: {:?}", qemu_args);
+    log::debug!("Full QEMU arguments: {qemu_args:?}");
     shlex::Shlex::new(&qemu_args).collect::<Vec<String>>()
 }

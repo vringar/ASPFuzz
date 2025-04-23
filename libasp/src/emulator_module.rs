@@ -9,13 +9,14 @@ use serde::{Deserialize, Serialize};
 /// This module is a general utility module for things that weren't big enough to warrant their own module
 ///
 /// This includes the Tunnels, since they are fully stateless and so need neither a Module nor Metadata
-/// It is also responsible for updating the range map for DrCov and the Interupt Base address for the Exception Handler
+/// It is also responsible for updating the range map for `DrCov` and the Interupt Base address for the Exception Handler
 #[derive(Debug)]
 pub struct LibAspModule {
     config: YAMLConfig,
 }
 
 impl LibAspModule {
+    #[must_use]
     pub fn new(conf: YAMLConfig) -> Self {
         LibAspModule { config: conf }
     }

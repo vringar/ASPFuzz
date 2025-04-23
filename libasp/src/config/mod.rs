@@ -14,7 +14,7 @@ pub mod access_observer;
 use crate::reset_state::ResetLevel;
 use crate::{ExceptionModule, LibAspModule};
 /// Parsing the YAML config file
-use libafl_qemu::*;
+use libafl_qemu::{sys, GuestAddr};
 use serde::Deserialize;
 use sys::GuestUsize;
 
@@ -44,6 +44,7 @@ pub enum ZenVersion {
 }
 
 impl ZenVersion {
+    #[must_use]
     pub fn get_qemu_machine_name(&self) -> &'static str {
         match self {
             ZenVersion::Zen1 => "amd-psp-zen",
@@ -56,6 +57,7 @@ impl ZenVersion {
     }
     /// This function returns a list of possible addresses that jumps into the on-chip BL
     /// This could be used in future work to update the `ExceptionHandler` address
+    #[must_use]
     pub fn get_last_off_chip_bl_instruction(&self) -> Vec<GuestAddr> {
         match self {
             ZenVersion::Zen2 => vec![0xffff24f8],
@@ -65,6 +67,7 @@ impl ZenVersion {
 
     /// This function returns a list of possible addresses that jumps into the on-chip BL
     /// This could be used in future work to update the `ExceptionHandler` address
+    #[must_use]
     pub fn get_last_on_chip_bl_instruction(&self) -> Vec<GuestAddr> {
         match self {
             ZenVersion::Zen2 => vec![0x450],
@@ -131,6 +134,7 @@ pub fn init_global_conf(config_path: &Path, num_cores: u32, run_dir: PathBuf) {
     .unwrap();
 }
 
+#[must_use]
 pub fn borrow_global_conf() -> Option<&'static YAMLConfig> {
     get_run_conf().map(|e| &e.yaml_config)
 }

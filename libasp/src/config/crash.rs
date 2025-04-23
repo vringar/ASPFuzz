@@ -58,6 +58,7 @@ pub struct CrashModule {
 }
 
 impl CrashModule {
+    #[must_use]
     pub fn new(conf: CrashConfig) -> Self {
         CrashModule {
             c: conf,
@@ -84,7 +85,9 @@ where
             Hook::Empty,
             Hook::Function(exec_block_hook),
         );
-        if !self.c.mmap.forbidden_writes.is_empty() {
+        if self.c.mmap.forbidden_writes.is_empty() {
+            log::debug!("No write generation hooks");
+        } else {
             log::debug!("Adding write generation hooks");
             modules.writes(
                 Hook::Function(gen_writes_hook),
@@ -94,8 +97,6 @@ where
                 Hook::Function(exec_writes_hook),
                 Hook::Function(exec_writes_hook_n),
             );
-        } else {
-            log::debug!("No write generation hooks");
         }
     }
 }
@@ -118,11 +119,11 @@ where
     let runtime_config = &mut module.r;
     let id = runtime_config.counter_edge_hooks;
     runtime_config.counter_edge_hooks += 1;
-    for no_exec in module.c.mmap.no_exec.iter() {
+    for no_exec in &module.c.mmap.no_exec {
         if src >= no_exec.begin && src < no_exec.end {
             log::debug!("Generate block:");
-            log::debug!("> src: {:#x}", src);
-            log::debug!("> id: {:#x}", id);
+            log::debug!("> src: {src:#x}");
+            log::debug!("> id: {id:#x}");
             qemu.current_cpu().unwrap().trigger_breakpoint();
             return Some(id);
         }
@@ -163,10 +164,7 @@ fn exec_block_hook<ET, I, S>(
     let cpy_len: GuestAddr = cpu.read_reg(Regs::R2).unwrap();
     let cpy_dest_end: GuestAddr = cpy_dest_start + cpy_len;
     log::debug!(
-        "Flash read fn from {:#010x} to {:#010x} for {:#x} bytes",
-        cpy_src,
-        cpy_dest_start,
-        cpy_len
+        "Flash read fn from {cpy_src:#010x} to {cpy_dest_start:#010x} for {cpy_len:#x} bytes"
     );
     for area in &module.c.mmap.forbidden_memcopies {
         if (area.begin >= cpy_dest_start && area.begin < cpy_dest_end)
@@ -209,11 +207,11 @@ where
     // Don't emit hooks if they are outside of range
     for ForbiddenWritesConfig {
         no_hook: no_write, ..
-    } in module.c.mmap.forbidden_writes.iter()
+    } in &module.c.mmap.forbidden_writes
     {
         for no_ldr in no_write {
             if pc == *no_ldr {
-                log::debug!("Skipping generation hook for {:#010x}", pc);
+                log::debug!("Skipping generation hook for {pc:#010x}");
                 return None;
             }
         }
@@ -241,7 +239,7 @@ fn exec_writes_hook<ET, I, S>(
         .modules()
         .match_first_type()
         .expect("This should only run with a FlashHookConfig");
-    for &ForbiddenWritesConfig { begin, end, .. } in module.c.mmap.forbidden_writes.iter() {
+    for &ForbiddenWritesConfig { begin, end, .. } in &module.c.mmap.forbidden_writes {
         if addr >= begin && addr < end {
             log::debug!("Execute writes: pc: {pc:#x} addr: {addr:#x}");
             // log::debug!("> data: {}", todo!() as u64);
@@ -262,7 +260,7 @@ fn exec_writes_hook_n<I: Unpin, ET: EmulatorModuleTuple<I, S>, S>(
         .modules()
         .match_first_type()
         .expect("This should only run with a FlashHookConfig");
-    for no_write in module.c.mmap.forbidden_writes.iter() {
+    for no_write in &module.c.mmap.forbidden_writes {
         if addr >= no_write.begin && addr < no_write.end {
             log::debug!("Execute writes: pc: {pc:#x}, addr: {addr:#x}, size: {size}");
             // log::debug!("> data: {}", (todo!() as u32));

@@ -1,7 +1,7 @@
 //! A fuzzer using qemu in systemmode for binary-only coverage of kernels
 //!
 use core::{ptr::addr_of_mut, time::Duration};
-use std::{ops::Deref, process};
+use std::process;
 
 use crate::setup::{parse_args, setup_directory_structure};
 use libafl::{
@@ -13,7 +13,7 @@ use libafl::{
     fuzzer::{Fuzzer, StdFuzzer},
     inputs::BytesInput,
     monitors::MultiMonitor,
-    mutators::{havoc_mutations::havoc_mutations, scheduled::StdScheduledMutator},
+    mutators::{havoc_mutations::havoc_mutations, scheduled::HavocScheduledMutator},
     observers::{CanTrack, HitcountsMapObserver, TimeObserver, VariableMapObserver},
     schedulers::{IndexesLenTimeMinimizerScheduler, QueueScheduler},
     stages::StdMutationalStage,
@@ -159,7 +159,7 @@ pub fn fuzz() -> Result<(), Error> {
                     // Doing this in an EmulatorModule results in a read after the snapshot has been restored
                     state.metadata_map_mut().insert(RegisterMetadata::new(qemu));
                     state.add_metadata(MiscMetadata {
-                        mailbox_values: read_mailbox_value(&qemu.cpu_from_index(0))
+                        mailbox_values: read_mailbox_value(&qemu.cpu_from_index(0).unwrap())
                             .expect("Failed to read mailbox"),
                     });
 
@@ -172,7 +172,7 @@ pub fn fuzz() -> Result<(), Error> {
                         Ok(QemuExitReason::End(QemuShutdownCause::HostSignal(signal))) => {
                             log::error!("HostSignal");
                             // will take care of cleanly stopping the fuzzer.
-                            signal.handle()
+                            signal.handle();
                         }
 
                         Err(QemuExitError::UnexpectedExit) => {
@@ -183,11 +183,11 @@ pub fn fuzz() -> Result<(), Error> {
                     }
 
                     // If the execution stops at any point other than the designated breakpoint (e.g. a breakpoint on a panic method) we consider it a crash
-                    let pc: u32 = qemu.cpu_from_index(0).read_reg(Regs::Pc).unwrap();
+                    let pc: u32 = qemu.cpu_from_index(0).unwrap().read_reg(Regs::Pc).unwrap();
                     let ret = if conf.yaml_config.harness.sinks.contains(&pc) {
                         ExitKind::Ok
                     } else {
-                        log::error!("Unexpected exit at PC: {:#x}", pc);
+                        log::error!("Unexpected exit at PC: {pc:#x}");
                         ExitKind::Crash
                     };
                     log::error!("Harness done with exit code {ret:?}");
@@ -218,6 +218,8 @@ pub fn fuzz() -> Result<(), Error> {
                 // Time feedback, this one does not need a feedback state
                 time_feedback.clone()
             );
+            let objective_map_feedback =
+                MaxMapFeedback::with_name("objective_map_feedback", &edges_observer);
 
             // A feedback to choose if an input is a solution or not
             let mut objective = feedback_or_fast!(
@@ -226,7 +228,7 @@ pub fn fuzz() -> Result<(), Error> {
                     feedback_and_fast!(
                         feedback_or_fast!(CrashFeedback::new(), ExceptionFeedback::default()),
                         // Only report those crashes that resulted in new coverage
-                        MaxMapFeedback::new(&edges_observer),
+                        objective_map_feedback,
                     ),
                 ),
                 // Always false but adds metadata to the output
@@ -239,7 +241,7 @@ pub fn fuzz() -> Result<(), Error> {
                     // RNG
                     StdRand::with_seed(current_nanos() + client_description.id() as u64),
                     // Corpus that will be evolved, we keep it in memory for performance
-                    CachedOnDiskCorpus::new(input_dir.deref(), 1000).unwrap(),
+                    CachedOnDiskCorpus::new(&*input_dir, 1000).unwrap(),
                     // Corpus in which we store solutions (crashes in this example),
                     // on disk so the user can get them after stopping the fuzzer
                     OnDiskCorpus::new(solutions_dir.clone()).unwrap(),
@@ -291,7 +293,7 @@ pub fn fuzz() -> Result<(), Error> {
             }
 
             // Setup an havoc mutator with a mutational stage
-            let mutator = StdScheduledMutator::new(havoc_mutations());
+            let mutator = HavocScheduledMutator::new(havoc_mutations());
             let mut stages = tuple_list!(StdMutationalStage::new(mutator));
 
             fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;

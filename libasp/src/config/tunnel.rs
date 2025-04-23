@@ -1,6 +1,6 @@
 use std::fmt;
 
-use libafl_qemu::*;
+use libafl_qemu::{EmulatorModules, GuestAddr, GuestReg, Hook, Qemu, Regs};
 use log;
 use serde::{
     de::{self, Visitor},
@@ -68,12 +68,7 @@ impl TunnelConfig {
                     addr,
                     Hook::Closure(Box::new(
                         move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
-                            log::debug!(
-                                "Tunnel - Constant [{:#x}, {:?}, {:#x}]",
-                                addr,
-                                target,
-                                value
-                            );
+                            log::debug!("Tunnel - Constant [{addr:#x}, {target:?}, {value:#x}]");
                             qemu.write_reg(target, value).unwrap();
                         },
                     )),
@@ -83,12 +78,7 @@ impl TunnelConfig {
                     addr,
                     Hook::Closure(Box::new(
                         move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
-                            log::debug!(
-                                "Tunnel - Register [{:#x}, {:?}, {:?}]",
-                                addr,
-                                target,
-                                source
-                            );
+                            log::debug!("Tunnel - Register [{addr:#x}, {target:?}, {source:?}]");
 
                             let value: u32 = qemu.read_reg(source).unwrap();
                             qemu.write_reg(target, value).unwrap();
@@ -100,7 +90,7 @@ impl TunnelConfig {
                     addr,
                     Hook::Closure(Box::new(
                         move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
-                            log::info!("Tunnel - Jump [{:#x},{:#x}, {:#x}]", addr, source, target);
+                            log::info!("Tunnel - Jump [{addr:#x},{source:#x}, {target:#x}]");
                             let inst: [u8; 2] = generate_branch_call(source, target);
                             // Patch the instruction by overwriting it
                             qemu.write_mem(source, &inst)
@@ -116,7 +106,7 @@ impl TunnelConfig {
                     Hook::Closure(Box::new(
                         move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
                             let value: u32 = qemu.read_reg(target).unwrap();
-                            log::debug!("Tunnel - Log [{:#x}, {:?}, {:#x}]", addr, target, value);
+                            log::debug!("Tunnel - Log [{addr:#x}, {target:?}, {value:#x}]");
                         },
                     )),
                     false,
@@ -129,10 +119,7 @@ impl TunnelConfig {
                     Hook::Closure(Box::new(
                         move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
                             log::debug!(
-                                "Tunnel - WriteMem [{:#x}, {:#x}, {:?}]",
-                                addr,
-                                memory_addr,
-                                value
+                                "Tunnel - WriteMem [{addr:#x}, {memory_addr:#x}, {value:?}]"
                             );
                             qemu.write_mem(memory_addr, &value)
                                 .expect("WriteMem failed");
@@ -152,10 +139,7 @@ impl TunnelConfig {
                                 .expect("ReadMem failed");
 
                             log::debug!(
-                                "Tunnel - LogMemory [{:#x}, {:#x}, {:02x?}]",
-                                addr,
-                                memory_addr,
-                                buf
+                                "Tunnel - LogMemory [{addr:#x}, {memory_addr:#x}, {buf:02x?}]"
                             );
                         },
                     )),
@@ -176,11 +160,7 @@ fn generate_branch_call(cur_pc: u32, target: u32) -> [u8; 2] {
     assert!(diff % 2 == 0);
     let mask = (1i16 << 11) - 1;
     let inst = (0b11100 << 11) | ((diff / 2) & mask);
-    log::info!(
-        "Generating jump instruction diff: {:#x} inst: {:#x}",
-        diff,
-        inst
-    );
+    log::info!("Generating jump instruction diff: {diff:#x} inst: {inst:#x}");
     inst.to_le_bytes()
 }
 
@@ -207,6 +187,7 @@ where
     deserializer.deserialize_str(RegisterVisitor)
 }
 /// As we do not own the Regs type this is the best we can do
+#[must_use]
 pub fn parse_regs2(reg: &str) -> Option<Regs> {
     Some(match reg {
         "R0" => Regs::R0,

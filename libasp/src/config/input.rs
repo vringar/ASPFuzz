@@ -41,7 +41,7 @@ impl FlashConfig {
     }
 
     fn apply_input(&self, mut buffer: &[u8]) {
-        for input_location in self.input.iter() {
+        for input_location in &self.input {
             unsafe {
                 write_flash_mem(input_location.addr, &buffer[..input_location.size]);
             }
@@ -49,7 +49,7 @@ impl FlashConfig {
         }
 
         // Fixed values to memory
-        for &FixedLocation { addr, val } in self.fixed.iter() {
+        for &FixedLocation { addr, val } in &self.fixed {
             let buffer = val.to_ne_bytes();
             unsafe {
                 write_flash_mem(addr, &buffer);
@@ -70,7 +70,7 @@ impl MemoryConfig {
         self.input.iter().fold(0, |counter, e| counter + e.size)
     }
     fn apply_input(&self, mut buf: &[u8], writer: impl Fn(GuestAddr, &[u8])) {
-        for input_location in self.input.iter() {
+        for input_location in &self.input {
             log::debug!(
                 "Writing input to memory: {:#x} size: {} value: {:02x?}",
                 input_location.addr,
@@ -82,8 +82,8 @@ impl MemoryConfig {
         }
 
         // Fixed values to memory
-        for &FixedLocation { addr, val } in self.fixed.iter() {
-            log::debug!("Writing constant at {:#x} value: {}", addr, val);
+        for &FixedLocation { addr, val } in &self.fixed {
+            log::debug!("Writing constant at {addr:#x} value: {val}");
             let buffer = val.to_ne_bytes();
             writer(addr, &buffer);
         }
@@ -105,10 +105,11 @@ pub struct InputConfig {
 }
 
 impl InputConfig {
+    #[must_use]
     pub fn total_size(&self) -> usize {
-        self.flash.as_ref().map(|i| i.size()).unwrap_or(0)
-            + self.x86.as_ref().map(|i| i.size()).unwrap_or(0)
-            + self.psp.as_ref().map(|i| i.size()).unwrap_or(0)
+        self.flash.as_ref().map_or(0, FlashConfig::size)
+            + self.x86.as_ref().map_or(0, MemoryConfig::size)
+            + self.psp.as_ref().map_or(0, MemoryConfig::size)
             + if self.has_mailbox() { 12 } else { 0 }
     }
 }
@@ -125,7 +126,7 @@ impl InputConfig {
                     let image: Vec<u8> = fs::read(base).unwrap();
                     // We're copying the input locations and appending them
                     // to the initial input. This ensures we are mutating from a known good state
-                    for mem in flash.input.iter() {
+                    for mem in &flash.input {
                         assert!(
                             mem.addr < flash_size && (mem.size as GuestAddr) < flash_size,
                             "Memory region outsize of flash memory size"
@@ -134,11 +135,12 @@ impl InputConfig {
                             ..((mem.addr & 0x00FF_FFFF) as usize) + mem.size];
                         new_input_image.extend_from_slice(mem_section);
                     }
-                    if input_total_size != new_input_image.len() {
-                        panic!("Extracted input to short");
-                    }
+                    assert!(
+                        (input_total_size == new_input_image.len()),
+                        "Extracted input to short"
+                    );
                     let mut new_input_path = PathBuf::from(&input_dir);
-                    new_input_path.push(format!("input{:#04}", i));
+                    new_input_path.push(format!("input{i:#04}"));
                     fs::write(new_input_path, new_input_image).unwrap();
                 }
             }
@@ -150,6 +152,7 @@ impl InputConfig {
         fs::write(new_input_path, vec![0_u8; input_total_size]).unwrap();
     }
 
+    #[must_use]
     pub fn setup_input_dir(&self, target_dir: &Path) -> Option<()> {
         let Some(inputs) = &self.initial_inputs else {
             return None;
@@ -215,13 +218,13 @@ impl InputConfig {
             flash.apply_input(flash_buf);
         }
         let qemu = Qemu::get().unwrap();
-        let cpu = &qemu.cpu_from_index(0);
+        let cpu = &qemu.cpu_from_index(0).expect("We always have one CPU");
 
         if let Some(x86) = self.x86.as_ref() {
             let x86_buf = &target_buf[..x86.size()];
             target_buf = &target_buf[x86.size()..];
             x86.apply_input(x86_buf, |addr, buf| {
-                write_x86_mem(cpu, addr, buf).expect("Failed to write to memory")
+                write_x86_mem(cpu, addr, buf).expect("Failed to write to memory");
             });
         }
 
@@ -229,7 +232,7 @@ impl InputConfig {
             let psp_buf = &target_buf[..psp.size()];
             target_buf = &target_buf[psp.size()..];
             psp.apply_input(psp_buf, |addr, buf| {
-                cpu.write_mem(addr, buf).expect("Input writing failed")
+                cpu.write_mem(addr, buf).expect("Input writing failed");
             });
         }
         if let Some(true) = self.mailbox {
@@ -255,6 +258,7 @@ impl InputConfig {
         assert!(target_buf.is_empty());
     }
 
+    #[must_use]
     pub fn has_mailbox(&self) -> bool {
         self.mailbox.unwrap_or(false)
     }
