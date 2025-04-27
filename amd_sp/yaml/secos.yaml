@@ -36,6 +36,46 @@ tunnels:
     source: 0x2a1c # what gets overwritten
     target: 0x2a2a # where to jump to
 
+  # skip hanging functions entirely
+#  - addr: 0x20053c
+#    action: Jump
+#    source: 0x20056e
+#    target: 0x200572
+#  - addr: 0x200574
+#    action: SetConstant
+#    target: R0
+#    value: 0x0
+#  - addr: 0x20290a
+#    action: SetConstant
+#    target: R0
+#    value: 0x0
+#  - addr: 0x2029f8
+#    action: SetConstant
+#    target: R0
+#    value: 0x0
+#  - addr: 0x202a50
+#    action: SetConstant
+#    target: R0
+#    value: 0x0
+
+
+# manipulate syscall to not wait for event 0x19
+  - addr: 0xe101da
+    action: SetConstant
+    target: R0
+    value: 0xffffffff
+# set fuse to actually write service page
+  - addr: 0xd29a
+    action: SetConstant
+    target: R0
+    value: 0x7
+
+  # set mmapfunc return to 0 instead of 0x34
+  - addr: 0x202a50
+    action: SetConstant
+    target: R0
+    value: 0x0
+
   # Debug error state
   - addr: 0xa9a4
     action: LogRegister
