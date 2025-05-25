@@ -59,11 +59,12 @@ tunnels:
 #    value: 0x0
 
 
-# manipulate syscall to not wait for event 0x19
-  - addr: 0xe101da
-    action: SetConstant
-    target: R0
-    value: 0xffffffff
+# skip syscall to not wait for event 0x19
+  - addr: 0xe101d8
+    action: PermaJump
+    source: 0xe101da
+    target: 0xe101dc
+
 # set fuse to actually write service page
   - addr: 0xd29a
     action: SetConstant
