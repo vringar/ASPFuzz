@@ -36,7 +36,7 @@ group.add_argument(
     "--file_list",
     action="store_true",
     required=False,
-    help="Should we geenrate a rsync transfer list",
+    help="Should we generate a rsync transfer list",
 )
 group.add_argument(
     "-b",
@@ -67,7 +67,7 @@ for file_path in directory_path.glob(".*.metadata"):
             name = file_path.name
             # Deduplicate the name for entries with the same hash
             first_hash = name.removeprefix(".").removesuffix(".metadata")
-            first_hash = first_hash.split("-")[0]
+            first_hash = first_hash.split("_")[0]
             actual_data = directory_path / first_hash
             data = json.load(f)
             # Navigate to the AccessObserverMetadata array and check if 'caught_write' is not null
