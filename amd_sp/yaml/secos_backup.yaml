@@ -12,23 +12,6 @@ flash:
   base: "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
 
 debug: true
-input:
-  flash:
-    # nothing
-  psp:
-    input:
-      - addr: 0x3010570
-        size: 0xc
-    fixed:
-      # nothing for now?
-  mailbox: true
-
-harness:
-  # use mailbox entry point for now
-  start: 0x200b4c
-  sinks:
-    # after function returns
-    - 0x200e70
 
 # Tunnels describe any fixup that has to happen during execution
 # at a certain address
@@ -104,15 +87,15 @@ tunnels:
     target: R0
     value: 0x1
 
- # - addr: 0x200b76
- #   action: SetConstant
- #   target: R6
- #   value: 0x14
+  - addr: 0x200b76
+    action: SetConstant
+    target: R6
+    value: 0x14
 
-#  - addr: 0x200b76
-#    action: SetConstant
-#    target: R9
-#    value: 0x0
+  - addr: 0x200b76
+    action: SetConstant
+    target: R9
+    value: 0x0
 
 
 
@@ -134,24 +117,3 @@ tunnels:
     action: LogMemory
     target: 0x3010570
     size: 4
-
-
-
-crashes:
-  breakpoints:
-    - 0x200b7e
-  mmap:
-    no_exec:
-      # this will probably become important
-    ccp_memcopy_addr: 0x0
-    forbidden_memcopies:
-    forbidden_writes:
-    x86:
-      start: 0xfffd00000000
-      end: 0xffffffffffff
-
-snapshot:
-  default: "SuperLazy"
-  on_crash: "HardReset"
-  periodically: "RustSnapshot"
-  period: 100000

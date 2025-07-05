@@ -22,7 +22,7 @@ args = parser.parse_args()
 run_dir_path = Path(args.run_dir)
 uninteresting_pc = args.uninteresting_pc
 
-hash_re = re.compile("/.([0-9a-f-]{16,19}).metadata")
+hash_re = re.compile("/.([0-9a-f-_]{16,19}).metadata")
 pc_re = re.compile("pc: (0x[0-9a-f]*)")
 lr_re = re.compile("lr: (0x[0-9a-f]*)")
 

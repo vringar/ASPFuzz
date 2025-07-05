@@ -24,6 +24,10 @@ pub enum CmpAction {
     Jump {
         source: GuestAddr,
         target: GuestAddr,
+    },    
+    PermaJump {
+        source: GuestAddr,
+        target: GuestAddr,
     },
     LogRegister {
         #[serde(deserialize_with = "parse_regs")]
@@ -100,6 +104,21 @@ impl TunnelConfig {
                         },
                     )),
                     true,
+                ),
+                CmpAction::PermaJump { source, target } => emu_modules.instructions(
+                    addr,
+                    Hook::Closure(Box::new(
+                        move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
+                            log::info!("Tunnel - Jump [{addr:#x},{source:#x}, {target:#x}]");
+                            let inst: [u8; 2] = generate_branch_call(source, target);
+                            // Patch the instruction by overwriting it
+                            qemu.write_mem(source, &inst)
+                                .expect("Overwriting instruction failed");
+
+                            qemu.flush_jit();
+                        },
+                    )),
+                    false,
                 ),
                 CmpAction::LogRegister { target } => emu_modules.instructions(
                     addr,
