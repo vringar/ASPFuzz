@@ -154,13 +154,13 @@ if args.file_list:
 for pc, per_write_loc in write_locations.items():
     for write_loc, entries in per_write_loc.items():
         print(
-            f"Write \t PC: {hex(pc)}\t {"Location" if not args.binary else "CommandID"}: \t {hex(write_loc)}\t count: {len(entries)}\t Exemplar: {entries.pop()}"
+            f"Write \t PC: {hex(pc)}\t {'Location' if not args.binary else 'CommandID'}: \t {hex(write_loc)}\t count: {len(entries)}\t Exemplar: {entries.pop()}"
         )
 
 for pc, per_read_loc in read_locations.items():
     for read_loc, entries in per_read_loc.items():
         print(
-            f"Read \t PC: {hex(pc)}\t {"Location" if not args.binary else "CommandID"}: \t {hex(read_loc)}\t count: {len(entries)}\t Exemplar: {entries.pop()}"
+            f"Read \t PC: {hex(pc)}\t {'Location' if not args.binary else 'CommandID'}: \t {hex(read_loc)}\t count: {len(entries)}\t Exemplar: {entries.pop()}"
         )
 
 for exception, per_lr in exceptions.items():
