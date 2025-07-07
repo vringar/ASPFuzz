@@ -166,7 +166,8 @@ pub fn fuzz() -> Result<(), Error> {
                     match res {
                         Ok(QemuExitReason::Breakpoint(_)) => {} // continue execution, nothing to do there.
                         Ok(QemuExitReason::Timeout) => {
-                            log::error!("Timeout");
+                            let pc: u32 = qemu.cpu_from_index(0).unwrap().read_reg(Regs::Pc).unwrap();
+                            log::error!("Timeout at {:#x}", pc);
                             return ExitKind::Timeout;
                         } // timeout, propagate
                         Ok(QemuExitReason::End(QemuShutdownCause::HostSignal(signal))) => {

@@ -129,6 +129,7 @@ for file_path in directory_path.glob(".*.metadata"):
                     write_caught is not None
                     or read_caught is not None
                     or exception_meta is not None
+                    or True
                 ):
                     (command, upper, lower) = extract_command(actual_data)
                     crashing_commands.add(hex(command.CommandId))

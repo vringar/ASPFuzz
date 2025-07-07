@@ -18,8 +18,12 @@ input:
   psp:
     input:
       - addr: 0x3010570
-        size: 0xc
+        size: 0x4
     fixed:
+      - addr: 0x3010574
+        val: 0x10000000
+      - addr: 0x3010578
+        val: 0x0
       # nothing for now?
   mailbox: true
 
@@ -27,8 +31,9 @@ harness:
   # use mailbox entry point for now
   start: 0x200b4c
   sinks:
+
     # after function returns
-    - 0x200e70
+    # - 0x200e70
 
 # Tunnels describe any fixup that has to happen during execution
 # at a certain address
@@ -95,7 +100,7 @@ tunnels:
     value: 0x0
 
   - addr: 0x200e4a
-    action: Jump
+    action: PermaJump
     source: 0x200e68
     target: 0x200e6a
 
@@ -139,7 +144,12 @@ tunnels:
 
 crashes:
   breakpoints:
-    - 0x200b7e
+    # - 0x200e74
+    - 0x00200e74
+    - 0x00000ef6 # faulty instruction?
+    - 0x002016ee
+    - 0x0020172e
+    - 0x00001db2 # wfi
   mmap:
     no_exec:
       # this will probably become important
