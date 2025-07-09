@@ -82,22 +82,20 @@ tunnels:
     source: 0x200e68
     target: 0x200e6a
 
-  - addr: 0x200b76
-    action: SetConstant
-    target: R0
-    value: 0x1
-
-  - addr: 0x200b76
-    action: SetConstant
-    target: R6
-    value: 0x14
-
-  - addr: 0x200b76
+  - addr: 0x200b74
     action: SetConstant
     target: R9
-    value: 0x0
+    value: 0xb5
 
+  - addr: 0x200b76
+    action: SetConstant
+    target: R8
+    value: 0xb5b50f1e
 
+  - addr: 0x200b60
+    action: SetMemory
+    target: "*R4"
+    value: 0x0f1e0000
 
   # Debug error state
   - addr: 0xa9a4
