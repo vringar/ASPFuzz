@@ -31,9 +31,11 @@ harness:
   # use mailbox entry point for now
   start: 0x200b4c
   sinks:
-
-    # after function returns
-    # - 0x200e70
+    - 0x00200e74
+    - 0x002016ee
+    - 0x0020172e
+    - 0x00000ef6 # faulty instruction?
+#    - 0x00201b9a # 1e data abort
 
 # Tunnels describe any fixup that has to happen during execution
 # at a certain address
@@ -104,10 +106,10 @@ tunnels:
     source: 0x200e68
     target: 0x200e6a
 
-  - addr: 0x200b76
-    action: SetConstant
-    target: R0
-    value: 0x1
+#  - addr: 0x200b76
+#    action: SetConstant
+#    target: R0
+#    value: 0x1
 
  # - addr: 0x200b76
  #   action: SetConstant
@@ -144,11 +146,6 @@ tunnels:
 
 crashes:
   breakpoints:
-    # - 0x200e74
-    - 0x00200e74
-    - 0x00000ef6 # faulty instruction?
-    - 0x002016ee
-    - 0x0020172e
     - 0x00001db2 # wfi
   mmap:
     no_exec:
