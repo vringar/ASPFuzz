@@ -89,6 +89,19 @@ impl MemoryConfig {
         }
     }
 }
+
+/// used if mailbox_content: true to determine location in x86 space and size there
+#[derive(Clone, Deserialize, Debug)]
+pub struct MailboxConfig {
+    mbox_high: GuestAddr,
+    mbox_low: GuestAddr,
+    size: usize,
+}
+
+impl MailboxConfig {
+    fn size(&self) -> usize {self.size}
+}
+
 /// Describes the entrirety of the fuzzable inputs
 /// This includes the flash memory, x86 memory and psp memory
 #[derive(Clone, Deserialize, Debug)]
@@ -101,6 +114,7 @@ pub struct InputConfig {
     psp: Option<MemoryConfig>,
     #[serde(default)]
     mailbox: Option<bool>,
+    mailbox_config: Option<MailboxConfig>,
     initial_inputs: Option<Vec<PathBuf>>,
 }
 
@@ -110,7 +124,10 @@ impl InputConfig {
         self.flash.as_ref().map_or(0, FlashConfig::size)
             + self.x86.as_ref().map_or(0, MemoryConfig::size)
             + self.psp.as_ref().map_or(0, MemoryConfig::size)
-            + if self.has_mailbox() { 12 } else { 0 }
+            + if self.has_mailbox() {
+                // 8 for high+low or size for content, + 4 for command-register
+                self.mailbox_config.as_ref().map_or(8, MailboxConfig::size) + 4
+            } else { 0 }
     }
 }
 
@@ -236,23 +253,40 @@ impl InputConfig {
             });
         }
         if let Some(true) = self.mailbox {
+            let lower : u32;
+            let higher: u32;
+            if let Some(content) = self.mailbox_config.as_ref() {
+                log::info!("Mailbox content: {:?}", content);
+                lower = content.mbox_high;
+                higher = content.mbox_high;
+            } else {
+                lower = target_buf
+                    .read_u32::<LittleEndian>()
+                    .expect("Not enough bytes for ptr_lower");
+                higher = (target_buf
+                    .read_u32::<LittleEndian>()
+                    .expect("Not enough bytes for ptr_higher")
+                    | 0x0000_fffc)
+                    & 0x0000_ffff;
+            }
+            
             write_mailbox_value(
                 cpu,
                 MailboxValues {
                     mbox: target_buf
                         .read_u32::<LittleEndian>()
                         .expect("Not enough bytes for mailbox"),
-                    ptr_lower: target_buf
-                        .read_u32::<LittleEndian>()
-                        .expect("Not enough bytes for ptr_lower"),
-                    ptr_higher: (target_buf
-                        .read_u32::<LittleEndian>()
-                        .expect("Not enough bytes for ptr_higher")
-                        | 0x0000_fffc)
-                        & 0x0000_ffff,
+                    ptr_lower: lower,
+                    ptr_higher: higher,
                 },
             )
             .expect("Failed to write to mailbox");
+
+            if let Some(content) = self.mailbox_config.as_ref() {
+                let x86_buf = &target_buf[..content.size];
+                target_buf = &target_buf[content.size..];
+                write_x86_mem(cpu, content.mbox_low, &x86_buf).expect("Failed to write to memory");
+            }
         }
         qemu.flush_jit();
         assert!(target_buf.is_empty());

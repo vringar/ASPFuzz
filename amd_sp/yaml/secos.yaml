@@ -26,16 +26,17 @@ input:
         val: 0x0
       # nothing for now?
   mailbox: true
+  mailbox_config:
+    mbox_high: 0x0
+    mbox_low: 0xd0000000
+    size: 1024
 
 harness:
   # use mailbox entry point for now
   start: 0x200b4c
   sinks:
-    - 0x00200e74
-    - 0x002016ee
-    - 0x0020172e
-    - 0x00000ef6 # faulty instruction?
-#    - 0x00201b9a # 1e data abort
+    - 0x00200e74 # end of function
+
 
 # Tunnels describe any fixup that has to happen during execution
 # at a certain address
@@ -147,6 +148,9 @@ tunnels:
 crashes:
   breakpoints:
     - 0x00001db2 # wfi
+    - 0x002016ee
+    - 0x0020172e
+    - 0x00000ef6 # faulty instruction?
   mmap:
     no_exec:
       # this will probably become important
