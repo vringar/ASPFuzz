@@ -36,6 +36,8 @@ harness:
   start: 0x200b4c
   sinks:
     - 0x00200e74 # end of function
+    - 0x002016ee
+    - 0x0020172e
 
 
 # Tunnels describe any fixup that has to happen during execution
@@ -148,15 +150,14 @@ tunnels:
 crashes:
   breakpoints:
     - 0x00001db2 # wfi
-    - 0x002016ee
-    - 0x0020172e
     - 0x00000ef6 # faulty instruction?
   mmap:
     no_exec:
-      # this will probably become important
     ccp_memcopy_addr: 0x0
     forbidden_memcopies:
     forbidden_writes:
+      start: 0x200000
+      end: 0x203660
     x86:
       start: 0xfffd00000000
       end: 0xffffffffffff
