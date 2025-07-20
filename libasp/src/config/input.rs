@@ -167,6 +167,7 @@ impl InputConfig {
         let mut new_input_path = PathBuf::from(&input_dir);
         new_input_path.push("input0000");
         fs::write(new_input_path, vec![0_u8; input_total_size]).unwrap();
+        log::info!("Input Size is {}", self.total_size());
     }
 
     #[must_use]

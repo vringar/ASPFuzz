@@ -15,16 +15,10 @@ debug: true
 input:
   flash:
     # nothing
+  x86:
+    # nothing
   psp:
-    input:
-      - addr: 0x3010570
-        size: 0x4
-    fixed:
-      - addr: 0x3010574
-        val: 0x10000000
-      - addr: 0x3010578
-        val: 0x0
-      # nothing for now?
+    # nothing
   mailbox: true
   mailbox_config:
     mbox_high: 0x0
