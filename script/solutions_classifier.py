@@ -16,7 +16,7 @@ def extract_command(actual_data: Path):
     # This is not correct for arbitrary run configs but works for mine
     with actual_data.open("rb") as f:
         data = f.read()
-    data = data[4:]
+    # data = data[4:]
     return (
         parse_mailbox(int.from_bytes(data[:4], "little")),
         int.from_bytes(data[4:8], "little"),

@@ -24,6 +24,8 @@ input:
     mbox_high: 0x0
     mbox_low: 0xd0000000
     size: 1024
+  initial_inputs:
+    - /root/PSPFuzzer/ASPFuzz/amd_sp/runs/sample_inputs
 
 harness:
   # use mailbox entry point for now
@@ -150,8 +152,8 @@ crashes:
     ccp_memcopy_addr: 0x0
     forbidden_memcopies:
     forbidden_writes:
-      start: 0x200000
-      end: 0x203660
+      - begin: 0x200000
+        end: 0x203660
     x86:
       start: 0xfffd00000000
       end: 0xffffffffffff
