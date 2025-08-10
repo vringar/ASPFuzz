@@ -5,7 +5,7 @@
 use libafl::Error;
 use libafl_bolts::impl_serdeany;
 use libafl_qemu::{
-    sys::{hwaddr, vaddr},
+    sys::{hwaddr, vaddr, GuestPhysAddr},
     GuestAddr, QemuError, CPU,
 };
 use serde::{Deserialize, Serialize};
@@ -32,7 +32,8 @@ pub unsafe fn write_flash_mem(addr: GuestAddr, buf: &[u8]) {
 }
 
 /// Provide the CPU as proof that QEMU has been initialized and is halted
-pub fn write_x86_mem(_cpu: &CPU, addr: GuestAddr, buf: &[u8]) -> Result<(), Error> {
+pub fn write_x86_mem(_cpu: &CPU, addr: GuestPhysAddr, buf: &[u8]) -> Result<(), Error> {
+    //println!("Wrote to {}", addr);
     let i;
     unsafe {
         i = aspfuzz_x86_write(

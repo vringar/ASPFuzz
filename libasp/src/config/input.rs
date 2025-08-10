@@ -3,7 +3,7 @@ use libafl::inputs::{BytesInput, HasTargetBytes};
 use libafl_bolts::AsSlice;
 use libafl_qemu::sys::GuestUsize;
 /// Generate initial inputs for the fuzzer based on provided UEFI images
-use libafl_qemu::{GuestAddr, Qemu};
+use libafl_qemu::{GuestAddr, GuestPhysAddr, Qemu};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 use std::{fs, vec};
@@ -228,7 +228,7 @@ impl InputConfig {
             );
         }
         let mut tmp_vec = Vec::from(input_bytes);
-        tmp_vec.resize(self.total_size(), 0);
+        tmp_vec.resize(self.total_size(), 0); // TODO: allow for variable length maybe
         let mut target_buf = tmp_vec.as_slice();
         if let Some(flash) = self.flash.as_ref() {
             let flash_buf = &target_buf[..flash.size()];
@@ -242,7 +242,7 @@ impl InputConfig {
             let x86_buf = &target_buf[..x86.size()];
             target_buf = &target_buf[x86.size()..];
             x86.apply_input(x86_buf, |addr, buf| {
-                write_x86_mem(cpu, addr, buf).expect("Failed to write to memory");
+                write_x86_mem(cpu, addr.into(), buf).expect("Failed to write to memory");
             });
         }
 
@@ -258,7 +258,7 @@ impl InputConfig {
             let higher: u32;
             if let Some(content) = self.mailbox_config.as_ref() {
                 log::info!("Mailbox content: {:?}", content);
-                lower = content.mbox_high;
+                lower = content.mbox_low;
                 higher = content.mbox_high;
             } else {
                 lower = target_buf
@@ -286,7 +286,7 @@ impl InputConfig {
             if let Some(content) = self.mailbox_config.as_ref() {
                 let x86_buf = &target_buf[..content.size];
                 target_buf = &target_buf[content.size..];
-                write_x86_mem(cpu, content.mbox_low, &x86_buf).expect("Failed to write to memory");
+                write_x86_mem(cpu, ((content.mbox_high as GuestPhysAddr) << 32 + content.mbox_low).into(), &x86_buf).expect("Failed to write to memory");
             }
         }
         qemu.flush_jit();
