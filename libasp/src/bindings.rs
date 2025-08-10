@@ -57,7 +57,7 @@ pub fn write_mailbox_value(cpu: &CPU, values: MailboxValues) -> Result<(), Error
         .map_err(QemuError::RW)?;
     cpu.write_mem(MAILBOX_BASE_ADDR + 4, &values.ptr_lower.to_le_bytes())
         .map_err(QemuError::RW)?;
-    cpu.write_mem(MAILBOX_BASE_ADDR + 8, &values.ptr_lower.to_le_bytes())
+    cpu.write_mem(MAILBOX_BASE_ADDR + 8, &values.ptr_higher.to_le_bytes())
         .map_err(QemuError::RW)?;
     Ok(())
 }

@@ -22,7 +22,7 @@ input:
   mailbox: true
   mailbox_config:
     mbox_high: 0x0
-    mbox_low: 0x00000000
+    mbox_low: 0xd0000000
     size: 1024
   initial_inputs:
     - /root/PSPFuzzer/ASPFuzz/amd_sp/runs/sample_inputs
