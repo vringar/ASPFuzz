@@ -286,7 +286,7 @@ impl InputConfig {
             if let Some(content) = self.mailbox_config.as_ref() {
                 let x86_buf = &target_buf[..content.size];
                 target_buf = &target_buf[content.size..];
-                write_x86_mem(cpu, ((content.mbox_high as GuestPhysAddr) << 32 + content.mbox_low).into(), &x86_buf).expect("Failed to write to memory");
+                write_x86_mem(cpu, ((content.mbox_high as GuestPhysAddr) << 32 + (content.mbox_low as GuestPhysAddr)).into(), &x86_buf).expect("Failed to write to memory");
             }
         }
         qemu.flush_jit();

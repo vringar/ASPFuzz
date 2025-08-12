@@ -1,5 +1,6 @@
 use std::fmt;
-
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use libafl_qemu::{EmulatorModules, GuestAddr, GuestReg, Hook, Qemu, Regs};
 use log;
 use serde::{
@@ -24,6 +25,7 @@ pub enum CmpAction {
     Jump {
         source: GuestAddr,
         target: GuestAddr,
+        ignore: Option<u32>
     },    
     PermaJump {
         source: GuestAddr,
@@ -90,21 +92,37 @@ impl TunnelConfig {
                     )),
                     false,
                 ),
-                CmpAction::Jump { source, target } => emu_modules.instructions(
-                    addr,
-                    Hook::Closure(Box::new(
-                        move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
-                            log::info!("Tunnel - Jump [{addr:#x},{source:#x}, {target:#x}]");
-                            let inst: [u8; 2] = generate_branch_call(source, target);
-                            // Patch the instruction by overwriting it
-                            qemu.write_mem(source, &inst)
-                                .expect("Overwriting instruction failed");
+                CmpAction::Jump { source, target , ignore} => {
+                    let skip = ignore.unwrap_or(0);
+                    let counter = Arc::new(AtomicU32::new(0));
+                    let fired = Arc::new(AtomicBool::new(false));
+                    emu_modules.instructions(
+                        addr,
+                        Hook::Closure(Box::new({
+                            let counter = Arc::clone(&counter);
+                            let fired = Arc::clone(&fired);
+                            move |qemu: Qemu, _hks: &mut EmulatorModules<ET, I, S>, _state, _pc| {
+                                let prev = counter.fetch_add(1, Ordering::SeqCst);
+                                if prev < skip {
+                                    log::info!("Tunnel - Jump [{addr:#x},{source:#x}, {target:#x}] on skip {prev:#x} of {skip:#x}");
+                                    return;
+                                }
+                                if fired.swap(true, Ordering::SeqCst) {
+                                    return;
+                                }
+                                
+                                log::info!("Tunnel - Jump [{addr:#x},{source:#x}, {target:#x}] triggering");
+                                let inst: [u8; 2] = generate_branch_call(source, target);
+                                // Patch the instruction by overwriting it
+                                qemu.write_mem(source, &inst)
+                                    .expect("Overwriting instruction failed");
 
-                            qemu.flush_jit();
-                        },
-                    )),
-                    true,
-                ),
+                                qemu.flush_jit();
+                            }
+                        })),
+                        true,
+                    )
+                },
                 CmpAction::PermaJump { source, target } => emu_modules.instructions(
                     addr,
                     Hook::Closure(Box::new(
