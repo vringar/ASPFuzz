@@ -99,7 +99,9 @@ pub struct MailboxConfig {
 }
 
 impl MailboxConfig {
-    fn size(&self) -> usize {self.size}
+    fn size(&self) -> usize {
+        self.size
+    }
 }
 
 /// Describes the entrirety of the fuzzable inputs
@@ -127,7 +129,9 @@ impl InputConfig {
             + if self.has_mailbox() {
                 // 8 for high+low or size for content, + 4 for command-register
                 self.mailbox_config.as_ref().map_or(8, MailboxConfig::size) + 4
-            } else { 0 }
+            } else {
+                0
+            }
     }
 }
 
@@ -254,7 +258,7 @@ impl InputConfig {
             });
         }
         if let Some(true) = self.mailbox {
-            let lower : u32;
+            let lower: u32;
             let higher: u32;
             if let Some(content) = self.mailbox_config.as_ref() {
                 log::info!("Mailbox content: {:?}", content);
@@ -270,7 +274,7 @@ impl InputConfig {
                     | 0x0000_fffc)
                     & 0x0000_ffff;
             }
-            
+
             write_mailbox_value(
                 cpu,
                 MailboxValues {
@@ -286,7 +290,14 @@ impl InputConfig {
             if let Some(content) = self.mailbox_config.as_ref() {
                 let x86_buf = &target_buf[..content.size];
                 target_buf = &target_buf[content.size..];
-                write_x86_mem(cpu, ((content.mbox_high as GuestPhysAddr) << 32 + (content.mbox_low as GuestPhysAddr)).into(), &x86_buf).expect("Failed to write to memory");
+                write_x86_mem(
+                    cpu,
+                    ((content.mbox_high as GuestPhysAddr)
+                        << 32 + (content.mbox_low as GuestPhysAddr))
+                        .into(),
+                    &x86_buf,
+                )
+                .expect("Failed to write to memory");
             }
         }
         qemu.flush_jit();

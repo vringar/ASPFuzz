@@ -58,6 +58,8 @@
           ninja
           python_pkgs.libfdt
           python_pkgs.black
+          python_pkgs.sphinx
+          python_pkgs.sphinx_rtd_theme
           python
         ];
 

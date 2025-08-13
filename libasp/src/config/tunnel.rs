@@ -1,12 +1,12 @@
-use std::fmt;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use libafl_qemu::{EmulatorModules, GuestAddr, GuestReg, Hook, Qemu, Regs};
 use log;
 use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer,
 };
+use std::fmt;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Arc;
 
 #[derive(Clone, Deserialize, Debug)]
 #[serde(tag = "action")]
@@ -25,8 +25,8 @@ pub enum CmpAction {
     Jump {
         source: GuestAddr,
         target: GuestAddr,
-        ignore: Option<u32>
-    },    
+        ignore: Option<u32>,
+    },
     PermaJump {
         source: GuestAddr,
         target: GuestAddr,
@@ -92,7 +92,11 @@ impl TunnelConfig {
                     )),
                     false,
                 ),
-                CmpAction::Jump { source, target , ignore} => {
+                CmpAction::Jump {
+                    source,
+                    target,
+                    ignore,
+                } => {
                     let skip = ignore.unwrap_or(0);
                     let counter = Arc::new(AtomicU32::new(0));
                     let fired = Arc::new(AtomicBool::new(false));
@@ -110,7 +114,6 @@ impl TunnelConfig {
                                 if fired.swap(true, Ordering::SeqCst) {
                                     return;
                                 }
-                                
                                 log::info!("Tunnel - Jump [{addr:#x},{source:#x}, {target:#x}] triggering");
                                 let inst: [u8; 2] = generate_branch_call(source, target);
                                 // Patch the instruction by overwriting it
@@ -122,7 +125,7 @@ impl TunnelConfig {
                         })),
                         true,
                     )
-                },
+                }
                 CmpAction::PermaJump { source, target } => emu_modules.instructions(
                     addr,
                     Hook::Closure(Box::new(
