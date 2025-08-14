@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 extern "C" {
     fn aspfuzz_write_smn_flash(addr: hwaddr, len: hwaddr, buf: *mut u8);
     fn aspfuzz_x86_write(addr: hwaddr, buf: *mut u8, len: hwaddr) -> i32;
+    fn aspfuzz_x86_read(addr: hwaddr, buf: *mut u8, len: hwaddr) -> i32;
     fn aspfuzz_access_observer_activate(addr: hwaddr, size: hwaddr) -> i32;
     fn aspfuzz_access_observer_reset() -> i32;
     /// This is a little tricky to use because we will always just write back
@@ -33,7 +34,6 @@ pub unsafe fn write_flash_mem(addr: GuestAddr, buf: &[u8]) {
 
 /// Provide the CPU as proof that QEMU has been initialized and is halted
 pub fn write_x86_mem(_cpu: &CPU, addr: GuestPhysAddr, buf: &[u8]) -> Result<(), Error> {
-    //println!("Wrote to {}", addr);
     let i;
     unsafe {
         i = aspfuzz_x86_write(
@@ -46,6 +46,20 @@ pub fn write_x86_mem(_cpu: &CPU, addr: GuestPhysAddr, buf: &[u8]) -> Result<(), 
         Ok(())
     } else {
         Err(Error::illegal_state("Failed to write to x86 memory"))
+    }
+}
+
+pub fn read_x86_mem(
+    _cpu: &CPU,
+    addr: GuestPhysAddr,
+    buf: &mut [u8],
+    len: GuestPhysAddr,
+) -> Result<(), Error> {
+    let i = unsafe { aspfuzz_x86_read(addr, buf.as_mut_ptr(), len) };
+    if i == 0 {
+        Ok(())
+    } else {
+        Err(Error::illegal_state("Failed to read from x86 memory"))
     }
 }
 

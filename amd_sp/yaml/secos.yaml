@@ -22,18 +22,21 @@ input:
   mailbox: true
   mailbox_config:
     mbox_high: 0x0
-    mbox_low: 0xd0000000
+    mbox_low: 0x00000000
     size: 1024
   initial_inputs:
-    - /root/PSPFuzzer/ASPFuzz/amd_sp/runs/sample_inputs
+    - /home/maximilian/Documents/uni/Fuzzer/ASPFuzz/amd_sp/sample_inputs
+  # - /root/PSPFuzzer/ASPFuzz/amd_sp/runs/sample_inputs
 
 harness:
   # use mailbox entry point for now
-  start: 0x200b4c
+  start: 0x200b4c # 0x200e74
   sinks:
-    - 0x00200e74 # end of function
+    - 0x00200e70 # end of function
     - 0x002016ee
     - 0x0020172e
+    - 0x00001db2 # wfi
+    - 0x00000ef6 # faulty instruction?
 
 
 # Tunnels describe any fixup that has to happen during execution
@@ -100,26 +103,44 @@ tunnels:
     target: R0
     value: 0x0
 
+  # Jump over Syscall
   - addr: 0x200e4a
     action: PermaJump
     source: 0x200e68
     target: 0x200e6a
 
-#  - addr: 0x200b76
-#    action: SetConstant
-#    target: R0
-#    value: 0x1
+  # Shorten the while true by one instruction to later set fuzzing start there
+  #- addr: 0x200e4e
+  #  action: PermaJump
+  #  source: 0x200e70
+  #  target: 0x200e62
 
- # - addr: 0x200b76
- #   action: SetConstant
- #   target: R6
- #   value: 0x14
+  # enable that skipped instruction after "ignore" many runs to do setup beforehand
+  #- addr: 0x200e64
+  #  action: Jump
+  #  source: 0x200e70
+  #  target: 0x200e74
+  #  ignore: 0
 
-#  - addr: 0x200b76
-#    action: SetConstant
-#    target: R9
-#    value: 0x0
+  # set mbox_cmd
+  #- addr: 0x200b4c
+  #  action: SetMemoryByte
+  #  target: "0x3010570"
+  #  value: 0x00020000
 
+  # set mbox_low
+  #- addr: 0x200b50
+  #  action: SetMemoryByte
+  #  target: "0x3010574"
+  #  value: 0xd0000000
+
+  # set mbox_high
+  #- addr: 0x200b52
+  #  action: SetMemoryByte
+  #  target: "0x3010578"
+  #  value: 0x0
+
+#  restore /home/maximilian/Documents/uni/Fuzzer/ASPFuzz/amd_sp/runs/sample_inputs/0x2_fixed binary 0x20285c 0x4
 
 
   # Debug error state
@@ -145,8 +166,7 @@ tunnels:
 
 crashes:
   breakpoints:
-    - 0x00001db2 # wfi
-    - 0x00000ef6 # faulty instruction?
+    - 0x201b46
   mmap:
     no_exec:
     ccp_memcopy_addr: 0x0

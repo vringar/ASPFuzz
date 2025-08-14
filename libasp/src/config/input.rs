@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::{fs, vec};
 
 use crate::config::get_run_conf;
-use crate::{write_flash_mem, write_mailbox_value, write_x86_mem, MailboxValues};
+use crate::{read_x86_mem, write_flash_mem, write_mailbox_value, write_x86_mem, MailboxValues};
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct InputLocation {
@@ -290,14 +290,16 @@ impl InputConfig {
             if let Some(content) = self.mailbox_config.as_ref() {
                 let x86_buf = &target_buf[..content.size];
                 target_buf = &target_buf[content.size..];
-                write_x86_mem(
-                    cpu,
-                    ((content.mbox_high as GuestPhysAddr)
-                        << 32 + (content.mbox_low as GuestPhysAddr))
-                        .into(),
-                    &x86_buf,
-                )
-                .expect("Failed to write to memory");
+                let target_addr = ((content.mbox_high as GuestPhysAddr) << 32)
+                    + (content.mbox_low as GuestPhysAddr);
+                write_x86_mem(cpu, target_addr, x86_buf).expect("Failed to write to memory");
+
+                // let mut sanity_check = [0u8; 1024];
+
+                // read_x86_mem(cpu, target_addr, &mut sanity_check, 1024)
+                //     .expect("Failed to read from memory");
+
+                // println!("{}", hex::encode(sanity_check));
             }
         }
         qemu.flush_jit();
