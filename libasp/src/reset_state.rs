@@ -146,8 +146,8 @@ impl ResetState {
 
         // Resetting SRAM (predefined section)
         let cpu = emu.current_cpu().unwrap(); // ctx switch safe
-        let sram_size: u32 = self.sram.len().try_into().unwrap();
-        let sram_slice = &self.sram[((sram_size - LAZY_SRAM_SIZE) as usize)..self.sram.len()];
+        let sram_size: GuestAddr = self.sram.len();
+        let sram_slice = &self.sram[(sram_size - LAZY_SRAM_SIZE)..self.sram.len()];
         cpu.write_mem(sram_size - LAZY_SRAM_SIZE, sram_slice)
             .expect("SRAM write failed");
     }

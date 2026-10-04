@@ -159,18 +159,30 @@ fn exec_block_hook<ET, I, S>(
     let cpu = qemu.current_cpu().unwrap();
     let pc = cpu.read_reg(Regs::Pc).unwrap();
     assert_eq!(pc as GuestAddr, module.c.mmap.ccp_memcopy_addr);
-    let cpy_src: GuestAddr = cpu.read_reg(Regs::R0).unwrap();
-    let cpy_dest_start: GuestAddr = cpu.read_reg(Regs::R1).unwrap();
-    let cpy_len: GuestAddr = cpu.read_reg(Regs::R2).unwrap();
-    let cpy_dest_end: GuestAddr = cpy_dest_start + cpy_len;
+    let cpy_src: GuestAddr = cpu.read_reg(Regs::R0).unwrap() as GuestAddr;
+    let cpy_dest_start: GuestAddr = cpu.read_reg(Regs::R1).unwrap() as GuestAddr;
+    let cpy_len: GuestAddr = cpu.read_reg(Regs::R2).unwrap() as GuestAddr;
+    // The guest is a 32-bit ARM core: its pointers wrap at 0x1_0000_0000, so the
+    // copy's end must be computed in guest (32-bit) width. A copy that crosses the
+    // 4 GiB boundary wraps back to low addresses on real hardware, and the forbidden
+    // region check must see those wrapped-to addresses too (not a flat 64-bit range).
+    let cpy_dest_end: GuestAddr = (cpy_dest_start + cpy_len) & 0xFFFF_FFFF;
     log::debug!(
         "Flash read fn from {cpy_src:#010x} to {cpy_dest_start:#010x} for {cpy_len:#x} bytes"
     );
+    // Is guest address `a` inside the destination range [start, end)? When the range
+    // wraps past 0 (end < start) it covers [start, 2^32) and [0, end). An empty copy
+    // (len == 0, so end == start) matches nothing, as in the pre-bump u32 version.
+    let in_dest = |a: GuestAddr| {
+        if cpy_dest_end >= cpy_dest_start {
+            a >= cpy_dest_start && a < cpy_dest_end
+        } else {
+            a >= cpy_dest_start || a < cpy_dest_end
+        }
+    };
     for area in &module.c.mmap.forbidden_memcopies {
-        if (area.begin >= cpy_dest_start && area.begin < cpy_dest_end)
-            || (area.end >= cpy_dest_start && area.end < cpy_dest_end)
-        {
-            let cpy_lr: GuestAddr = cpu.read_reg(Regs::Lr).unwrap();
+        if in_dest(area.begin) || in_dest(area.end) {
+            let cpy_lr: GuestAddr = cpu.read_reg(Regs::Lr).unwrap() as GuestAddr;
             log::debug!(
                 "Flash read fn writes to [{:#010x}, {:#010x}] from function {cpy_lr:#010x}",
                 area.begin,

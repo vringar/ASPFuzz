@@ -26,7 +26,7 @@ extern "C" {
 /// and the flash memory is accessible
 pub unsafe fn write_flash_mem(addr: GuestAddr, buf: &[u8]) {
     aspfuzz_write_smn_flash(
-        addr.into(),
+        addr as hwaddr,
         buf.len().try_into().unwrap(),
         buf.as_ptr().cast_mut(),
     );

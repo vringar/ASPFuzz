@@ -6,17 +6,17 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-libafl = { git = "ssh://git@git.tu-berlin.de/pspreverse/libafl.git", branch ="main",default-features = false, features = [
+libafl = { git = "https://github.com/PSPReverse/LibAFL", rev = "e5f1fa2bc1d52f4a2519c9a95717e4e1a44a8e28",default-features = false, features = [
     "prelude",
     "fork"
 ] }
-libafl_bolts = {  git = "ssh://git@git.tu-berlin.de/pspreverse/libafl.git", branch ="main", features = ["errors_backtrace", "stable_anymap"]}
-libafl_qemu = {  git = "ssh://git@git.tu-berlin.de/pspreverse/libafl.git", branch ="main", features = [
+libafl_bolts = {  git = "https://github.com/PSPReverse/LibAFL", rev = "e5f1fa2bc1d52f4a2519c9a95717e4e1a44a8e28", features = ["errors_backtrace", "stable_anymap"]}
+libafl_qemu = {  git = "https://github.com/PSPReverse/LibAFL", rev = "e5f1fa2bc1d52f4a2519c9a95717e4e1a44a8e28", features = [
     "arm",
     "systemmode",
 ], default-features = false }
 
-libafl_targets = {  git = "ssh://git@git.tu-berlin.de/pspreverse/libafl.git", branch ="main" }
+libafl_targets = {  git = "https://github.com/PSPReverse/LibAFL", rev = "e5f1fa2bc1d52f4a2519c9a95717e4e1a44a8e28" }
 
 [profile.dev]
 debug = true

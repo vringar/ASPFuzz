@@ -264,7 +264,7 @@ impl TunnelConfig {
 
 /// This generates the ARM branch call instruction
 // TODO: Jump or branch call?
-fn generate_branch_call(cur_pc: u32, target: u32) -> [u8; 2] {
+fn generate_branch_call(cur_pc: GuestAddr, target: GuestAddr) -> [u8; 2] {
     let diff = i32::try_from(target).unwrap() - i32::try_from(cur_pc + 4).unwrap();
     // TODO: diff == 0 --> nop?
     let diff = i16::try_from(diff).unwrap();

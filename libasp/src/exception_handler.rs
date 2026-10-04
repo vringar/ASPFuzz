@@ -2,7 +2,7 @@ use libafl::prelude::*;
 /// Catching and handling ARM CPU exceptions durign the test-case execution
 use libafl_qemu::{
     modules::{EmulatorModule, EmulatorModuleTuple},
-    EmulatorModules, Hook, HookId, InstructionHookId, Qemu,
+    EmulatorModules, GuestAddr, Hook, HookId, InstructionHookId, Qemu,
 };
 use strum::{EnumIter, FromRepr, IntoEnumIterator};
 
@@ -66,7 +66,7 @@ impl ExceptionModule {
 
         for enum_value in ExceptionType::iter() {
             // This is fine as long as we don't reach the tOS
-            let exception_addr = 0x100 + 4 * (enum_value as u32);
+            let exception_addr: GuestAddr = 0x100 + 4 * (enum_value as GuestAddr);
             if enum_value == ExceptionType::RESET || enum_value == ExceptionType::SVC {
                 continue;
             }

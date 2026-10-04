@@ -1,6 +1,6 @@
 use byteorder::{LittleEndian, ReadBytesExt};
 use libafl::inputs::{BytesInput, HasTargetBytes};
-use libafl_bolts::AsSlice;
+use libafl_bolts::ToSlice;
 use libafl_qemu::sys::GuestUsize;
 /// Generate initial inputs for the fuzzer based on provided UEFI images
 use libafl_qemu::{GuestAddr, GuestPhysAddr, Qemu};
@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::{fs, vec};
 
 use crate::config::get_run_conf;
-use crate::{read_x86_mem, write_flash_mem, write_mailbox_value, write_x86_mem, MailboxValues};
+use crate::{write_flash_mem, write_mailbox_value, write_x86_mem, MailboxValues};
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct InputLocation {
@@ -93,8 +93,8 @@ impl MemoryConfig {
 /// used if mailbox_content: true to determine location in x86 space and size there
 #[derive(Clone, Deserialize, Debug)]
 pub struct MailboxConfig {
-    mbox_high: GuestAddr,
-    mbox_low: GuestAddr,
+    mbox_high: u32,
+    mbox_low: u32,
     size: usize,
 }
 
@@ -223,7 +223,7 @@ impl InputConfig {
     pub fn apply_input(&self, input: &BytesInput) {
         // Input to memory
         let target = input.target_bytes();
-        let input_bytes = target.as_slice();
+        let input_bytes = target.to_slice();
         if get_run_conf().unwrap().yaml_config.debug {
             log::info!(
                 "Input bytes length: {} value: {:02x?}",
@@ -246,7 +246,7 @@ impl InputConfig {
             let x86_buf = &target_buf[..x86.size()];
             target_buf = &target_buf[x86.size()..];
             x86.apply_input(x86_buf, |addr, buf| {
-                write_x86_mem(cpu, addr.into(), buf).expect("Failed to write to memory");
+                write_x86_mem(cpu, addr as GuestPhysAddr, buf).expect("Failed to write to memory");
             });
         }
 

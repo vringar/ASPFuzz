@@ -1,5 +1,5 @@
 use chrono::Local;
-use clap::{command, Parser};
+use clap::Parser;
 
 use libasp::config::{borrow_global_conf, init_global_conf};
 

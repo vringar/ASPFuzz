@@ -35,7 +35,7 @@ use libafl_qemu::{
         utils::filters::{HasAddressFilter, StdAddressFilter},
         DrCovModule,
     },
-    Emulator, QemuExitError, QemuExitReason, QemuParams, QemuShutdownCause, Regs,
+    Emulator, GuestAddr, QemuExitError, QemuExitReason, QemuParams, QemuShutdownCause, Regs,
 };
 
 use libafl_targets::{edges_map_mut_ptr, EDGES_MAP_DEFAULT_SIZE, MAX_EDGES_FOUND};
@@ -91,7 +91,7 @@ pub fn fuzz() -> Result<(), Error> {
     // Generate initial inputs
     conf.yaml_config
         .input
-        .create_initial_inputs(conf.yaml_config.flash.size, &input_dir);
+        .create_initial_inputs(conf.yaml_config.flash.size as GuestAddr, &input_dir);
     let input_dir = Box::new(input_dir);
     let mut run_client = move |state: Option<MyState>,
                                mut mgr,
@@ -109,7 +109,8 @@ pub fn fuzz() -> Result<(), Error> {
             (0, "on-chip-ryzen-zen.bl".to_string()),
         );
         #[allow(clippy::single_range_in_vec_init)]
-        let filter = StdAddressFilter::deny_list(vec![0x0_u32..0xffff_ffff_u32]);
+        let filter =
+            StdAddressFilter::deny_list(vec![(0x0 as GuestAddr)..(0xffff_ffff as GuestAddr)]);
         // Configure QEMU hook helper
         let dr_cov_module = DrCovModule::builder()
             .module_mapping(rangemap)
@@ -215,7 +216,8 @@ pub fn fuzz() -> Result<(), Error> {
                 }
 
                 // If the execution stops at any point other than the designated breakpoint (e.g. a breakpoint on a panic method) we consider it a crash
-                let pc: u32 = qemu.cpu_from_index(0).unwrap().read_reg(Regs::Pc).unwrap();
+                let pc: GuestAddr =
+                    qemu.cpu_from_index(0).unwrap().read_reg(Regs::Pc).unwrap() as GuestAddr;
                 let ret = if conf.yaml_config.harness.sinks.contains(&pc) {
                     ExitKind::Ok
                 } else {
