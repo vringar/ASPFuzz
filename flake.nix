@@ -41,7 +41,7 @@
         # Must match rustc's LLVM version (rustc --version --verbose)
         # libafl_qemu_build requires llvm-config >= rustc's LLVM for bindgen
         llvm = pkgs.llvmPackages_22;
-        python = pkgs.python3;
+        python = pkgs.python3.withPackages (ps: with ps; [pip setuptools distlib]);
         python_pkgs = pkgs.python3Packages;
         # Things needed to build the software
         nativeBuildInputs = with pkgs; [
