@@ -1,0 +1,144 @@
+# This setup is primarily for running GDB until the DATB in the tOS
+qemu:
+  # Zen generation to emulate
+  zen: "Zen2"
+  # On-chip bootloader to use
+  on_chip_bl_path: "bins/on-chip-bl-Ryzen-Zen2-Desktop"
+# Flash informations
+flash:
+  # Size of flash memory
+  size: 0x1000000
+  # Base image in flash memory
+  base: "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
+
+debug: true
+input:
+  flash:
+    # nothing
+  x86:
+    # nothing
+  psp:
+    # nothing
+  mailbox: true
+  mailbox_config:
+    mbox_high: 0x0
+    mbox_low: 0x00000000
+    size: 272
+  initial_inputs:
+    - sample_inputs
+
+harness:
+  # use mailbox entry point for now
+  start: 0x200b4c
+  sinks:
+    - 0x00200e70 # end of function
+    - 0x002016ee
+    - 0x0020172e
+    - 0x00001db2 # wfi
+    - 0x00000ef6 # faulty instruction?
+
+
+# Tunnels describe any fixup that has to happen during execution
+# at a certain address
+# Jumps are very finicky
+# Jump to early and the TB will crash
+# Jump to late and there will be Data Aborts
+# The positions can change when upgrading QEMU
+tunnels:
+  # fix function in x86_workloop
+  - addr: 0x9236
+    action: SetConstant
+    target: R0
+    value: 0x0
+  # overwrite of 0x100ac
+  - addr: 0x6988
+    action: SetConstant
+    target: R0
+    value: 0x1
+  # SKIP ABL
+  - addr: 0x2938   # When the overwriting happens
+    action: Jump
+    source: 0x2a1c # what gets overwritten
+    target: 0x2a2a # where to jump to
+
+  # skip hanging functions entirely
+#  - addr: 0x20053c
+#    action: Jump
+#    source: 0x20056e
+#    target: 0x200572
+#  - addr: 0x200574
+#    action: SetConstant
+#    target: R0
+#    value: 0x0
+#  - addr: 0x20290a
+#    action: SetConstant
+#    target: R0
+#    value: 0x0
+#  - addr: 0x2029f8
+#    action: SetConstant
+#    target: R0
+#    value: 0x0
+#  - addr: 0x202a50
+#    action: SetConstant
+#    target: R0
+#    value: 0x0
+
+
+# set fuse to actually write service page
+  - addr: 0xd29a
+    action: SetConstant
+    target: R0
+    value: 0x7
+
+  # set mmapfunc return to 0 instead of 0x34
+  - addr: 0x202a50
+    action: SetConstant
+    target: R0
+    value: 0x0
+
+  # Jump over Syscall
+  - addr: 0x200e4a
+    action: PermaJump
+    source: 0x200e68
+    target: 0x200e6a
+
+  # Debug error state
+  - addr: 0xa9a4
+    action: LogRegister
+    target: LR
+  - addr: 0x7272
+    action: LogRegister
+    target: R1
+  - addr: 0xfca
+    action: LogRegister
+    target: R5
+  - addr: 0x907a
+    action: LogMemory
+    target: 0x3010570
+    size: 4
+  - addr: 0xfac
+    action: LogMemory
+    target: 0x3010570
+    size: 4
+
+
+#TODO: fix that if breakpoint is within code executed before harness, fuzzer will break
+crashes:
+  breakpoints:
+    # - 0x201b46
+  mmap:
+    no_exec:
+    ccp_memcopy_addr: 0x0
+    forbidden_memcopies:
+    forbidden_writes:
+      - begin: 0x200000
+        end: 0x203660
+    x86:
+      start: 0xfffd00000000
+      end: 0xffffffffffff
+
+snapshot:
+  default: "SuperLazy"
+  on_crash: "HardReset"
+  periodically: "RustSnapshot"
+  period: 100000
