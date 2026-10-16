@@ -35,7 +35,8 @@ use libafl_qemu::{
         utils::filters::{HasAddressFilter, StdAddressFilter},
         DrCovModule,
     },
-    Emulator, GuestAddr, QemuExitError, QemuExitReason, QemuParams, QemuShutdownCause, Regs,
+    DeviceSnapshotFilter, Emulator, GuestAddr, QemuExitError, QemuExitReason, QemuParams,
+    QemuShutdownCause, Regs,
 };
 
 use libafl_targets::{edges_map_mut_ptr, EDGES_MAP_DEFAULT_SIZE, MAX_EDGES_FOUND};
@@ -167,7 +168,18 @@ pub fn fuzz() -> Result<(), Error> {
 
         // emu.save_snapshot("start", true);
 
-        let snap = emulator.create_fast_snapshot(true);
+        if conf.verify_reset {
+            log::error!("verify-reset devices: {:?}", qemu.list_devices());
+        }
+        let snap = if let Some(dev) = conf.verify_reset_device.as_deref() {
+            log::error!("verify-reset: device-filtered snapshot on '{dev}'");
+            emulator.create_fast_snapshot_filter(
+                true,
+                &DeviceSnapshotFilter::AllowList(vec![dev.to_string()]),
+            )
+        } else {
+            emulator.create_fast_snapshot(true)
+        };
         log::error!("Snapshot created");
         // The wrapped harness function, calling out to the LLVM-style harness
         let mut harness = |emulator: &mut Emulator<_, _, _, _, _, MyState, _>,
@@ -200,6 +212,8 @@ pub fn fuzz() -> Result<(), Error> {
                     Ok(QemuExitReason::Timeout) => {
                         let pc: u32 = qemu.cpu_from_index(0).unwrap().read_reg(Regs::Pc).unwrap();
                         log::error!("Timeout at {:#x}", pc);
+                        // Restore before returning: the end-of-iteration restore is skipped by this early return
+                        emulator.restore_fast_snapshot(snap);
                         return ExitKind::Timeout;
                     } // timeout, propagate
                     Ok(QemuExitReason::End(QemuShutdownCause::HostSignal(signal))) => {
@@ -235,6 +249,25 @@ pub fn fuzz() -> Result<(), Error> {
 
                 // OPTION 3: restore a fast devices+mem snapshot
                 emulator.restore_fast_snapshot(snap);
+                if conf.verify_reset {
+                    // Diagnostic (board #334/#354): confirm the snapshotted
+                    // device + RAM state round-tripped exactly after restore.
+                    // A nonzero count means tracked state leaked across the
+                    // iteration (e.g. an interrupt-controller device with an
+                    // incomplete vmstate), which makes interrupt-driven SecOS
+                    // runs non-deterministic. This is the (b) gate for retiring
+                    // the IRQ-wait tunnels: it must stay 0 before a tunnel is
+                    // removed in favour of a real modelled interrupt.
+                    // SAFETY: inside the harness closure's existing `unsafe`
+                    // scope; `snap` is the live tracked snapshot from this run.
+                    let check = qemu.check_fast_snapshot(snap);
+                    if check.nb_page_inconsistencies != 0 {
+                        log::error!(
+                            "verify-reset FAIL: {} page inconsistencies after restore (non-deterministic reset)",
+                            check.nb_page_inconsistencies
+                        );
+                    }
+                }
                 ret
             }
         };

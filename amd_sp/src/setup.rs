@@ -24,6 +24,16 @@ struct Args {
     /// Number of cores
     #[arg(short, long)]
     num_cores: Option<u32>,
+
+    /// Diagnostic: after each iteration's snapshot restore, run
+    /// `check_fast_snapshot` and warn if device/RAM state did not reset
+    /// cleanly. Used to gate retiring the SecOS interrupt-wait tunnels once a
+    /// real interrupt controller is modelled (board #334/#354). Off by default.
+    #[arg(long)]
+    verify_reset: bool,
+    /// Device name to isolate in the verify-reset snapshot (DeviceSnapshotFilter AllowList).
+    #[arg(long)]
+    verify_reset_device: Option<String>,
 }
 
 pub fn setup_directory_structure(
@@ -75,7 +85,13 @@ pub fn parse_args() -> Vec<String> {
         );
         exit(3);
     };
-    init_global_conf(&cli_args.yaml_path, num_cores, run_dir.clone());
+    init_global_conf(
+        &cli_args.yaml_path,
+        num_cores,
+        run_dir.clone(),
+        cli_args.verify_reset,
+        cli_args.verify_reset_device.clone(),
+    );
     let conf = borrow_global_conf().unwrap();
 
     //Check if pathes exist
@@ -125,6 +141,9 @@ pub fn parse_args() -> Vec<String> {
     // As the access observer degrades emulation acccuracy and performance, only enable it if required
     if conf.crashes.x86.is_some() {
         qemu_args += " -global driver=amd_psp.x86.mapper,property=use_access_observer,value=true";
+    }
+    if let Ok(extra) = env::var("ASPFUZZ_EXTRA_QEMU_ARGS") {
+        qemu_args += &format!(" {extra}");
     }
     log::debug!("Full QEMU arguments: {qemu_args:?}");
     shlex::Shlex::new(&qemu_args).collect::<Vec<String>>()

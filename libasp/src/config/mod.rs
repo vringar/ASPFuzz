@@ -30,6 +30,11 @@ pub struct RunConfig {
     pub num_cores: u32,
     pub run_dir: PathBuf,
     pub config_path: PathBuf,
+    /// Diagnostic: verify the fuzz-iteration snapshot restore is deterministic
+    /// via `check_fast_snapshot` (board #334/#354). Off unless `--verify-reset`.
+    pub verify_reset: bool,
+    /// Device to isolate in the verify-reset snapshot (`--verify-reset-device`).
+    pub verify_reset_device: Option<String>,
 }
 
 #[derive(Clone, Deserialize, Debug)]
@@ -122,7 +127,13 @@ pub struct YAMLConfig {
     pub snapshot: SnapshotConfig,
 }
 
-pub fn init_global_conf(config_path: &Path, num_cores: u32, run_dir: PathBuf) {
+pub fn init_global_conf(
+    config_path: &Path,
+    num_cores: u32,
+    run_dir: PathBuf,
+    verify_reset: bool,
+    verify_reset_device: Option<String>,
+) {
     let yaml = YAMLConfig::new(config_path);
 
     CONF.set(RunConfig {
@@ -130,6 +141,8 @@ pub fn init_global_conf(config_path: &Path, num_cores: u32, run_dir: PathBuf) {
         num_cores,
         run_dir,
         config_path: config_path.to_owned(),
+        verify_reset,
+        verify_reset_device,
     })
     .unwrap();
 }
