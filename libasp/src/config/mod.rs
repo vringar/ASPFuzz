@@ -118,6 +118,9 @@ pub struct SnapshotConfig {
 pub struct YAMLConfig {
     #[serde(default)]
     pub debug: bool,
+    /// Use only mutators that keep the input length (no insert/delete/expand)
+    #[serde(default)]
+    pub fixed_length_mutators: bool,
     pub qemu: QemuConf,
     pub flash: FlashConfig,
     pub input: InputConfig,

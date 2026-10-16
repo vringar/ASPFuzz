@@ -13,7 +13,17 @@ use libafl::{
     fuzzer::{Fuzzer, StdFuzzer},
     inputs::BytesInput,
     monitors::MultiMonitor,
-    mutators::{havoc_mutations::havoc_mutations, scheduled::HavocScheduledMutator},
+    mutators::{
+        havoc_mutations::havoc_mutations,
+        mutations::{
+            BitFlipMutator, ByteAddMutator, ByteDecMutator, ByteFlipMutator, ByteIncMutator,
+            ByteInterestingMutator, ByteNegMutator, ByteRandMutator, BytesCopyMutator,
+            BytesRandSetMutator, BytesSetMutator, BytesSwapMutator, CrossoverReplaceMutator,
+            DwordAddMutator, DwordInterestingMutator, QwordAddMutator, WordAddMutator,
+            WordInterestingMutator,
+        },
+        scheduled::HavocScheduledMutator,
+    },
     observers::{CanTrack, HitcountsMapObserver, TimeObserver, VariableMapObserver},
     schedulers::{IndexesLenTimeMinimizerScheduler, QueueScheduler},
     stages::StdMutationalStage,
@@ -360,10 +370,35 @@ pub fn fuzz() -> Result<(), Error> {
         }
 
         // Setup an havoc mutator with a mutational stage
-        let mutator = HavocScheduledMutator::new(havoc_mutations());
-        let mut stages = tuple_list!(StdMutationalStage::new(mutator));
-
-        fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;
+        if conf.yaml_config.fixed_length_mutators {
+            // havoc without the length-changing mutators (insert/delete/expand)
+            let mutator = HavocScheduledMutator::new(tuple_list!(
+                BitFlipMutator::new(),
+                ByteFlipMutator::new(),
+                ByteIncMutator::new(),
+                ByteDecMutator::new(),
+                ByteNegMutator::new(),
+                ByteRandMutator::new(),
+                ByteAddMutator::new(),
+                WordAddMutator::new(),
+                DwordAddMutator::new(),
+                QwordAddMutator::new(),
+                ByteInterestingMutator::new(),
+                WordInterestingMutator::new(),
+                DwordInterestingMutator::new(),
+                BytesSetMutator::new(),
+                BytesRandSetMutator::new(),
+                BytesCopyMutator::new(),
+                BytesSwapMutator::new(),
+                CrossoverReplaceMutator::new(),
+            ));
+            let mut stages = tuple_list!(StdMutationalStage::new(mutator));
+            fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;
+        } else {
+            let mutator = HavocScheduledMutator::new(havoc_mutations());
+            let mut stages = tuple_list!(StdMutationalStage::new(mutator));
+            fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;
+        }
         Ok(())
     };
 
