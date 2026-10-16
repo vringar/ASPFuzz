@@ -85,6 +85,17 @@ where
             Hook::Empty,
             Hook::Function(exec_block_hook),
         );
+        // TEMPORARY: read watch over the boot-args table (set ASPFUZZ_READWATCH)
+        if std::env::var_os("ASPFUZZ_READWATCH").is_some() {
+            modules.reads(
+                Hook::Function(gen_reads_watch),
+                Hook::Function(exec_reads_watch),
+                Hook::Function(exec_reads_watch),
+                Hook::Function(exec_reads_watch),
+                Hook::Function(exec_reads_watch),
+                Hook::Function(exec_reads_watch_n),
+            );
+        }
         if self.c.mmap.forbidden_writes.is_empty() {
             log::debug!("No write generation hooks");
         } else {
@@ -278,5 +289,66 @@ fn exec_writes_hook_n<I: Unpin, ET: EmulatorModuleTuple<I, S>, S>(
             // log::debug!("> data: {}", (todo!() as u32));
             qemu.current_cpu().unwrap().trigger_breakpoint();
         }
+    }
+}
+
+// TEMPORARY read-watch helpers
+fn gen_reads_watch<ET, I, S>(
+    _qemu: Qemu,
+    _modules: &mut EmulatorModules<ET, I, S>,
+    _state: Option<&mut S>,
+    _pc: GuestAddr,
+    _: *mut TCGTemp,
+    _mem_acces_info: MemAccessInfo,
+) -> Option<u64>
+where
+    S: Unpin + HasMetadata,
+    ET: EmulatorModuleTuple<I, S>,
+    I: Unpin,
+{
+    Some(0)
+}
+
+fn watched(addr: GuestAddr) -> bool {
+    let a = addr as u64;
+    (0x4f52c..0x4f634).contains(&a)
+        || (0x20852c..0x208634).contains(&a)
+        || (0xe873a4..0xe874ac).contains(&a)
+        || (0x1000000..0x1000400).contains(&a)
+}
+
+fn exec_reads_watch<ET, I, S>(
+    qemu: Qemu,
+    _modules: &mut EmulatorModules<ET, I, S>,
+    _state: Option<&mut S>,
+    _id: u64,
+    pc: GuestAddr,
+    addr: GuestAddr,
+) where
+    S: Unpin + HasMetadata,
+    ET: EmulatorModuleTuple<I, S>,
+    I: Unpin,
+{
+    if watched(addr) {
+        let lr: u32 = qemu.current_cpu().unwrap().read_reg(Regs::Lr).unwrap();
+        log::info!("READWATCH pc={pc:#x} lr={lr:#x} addr={addr:#x}");
+    }
+}
+
+fn exec_reads_watch_n<I: Unpin, ET: EmulatorModuleTuple<I, S>, S>(
+    qemu: Qemu,
+    modules: &mut EmulatorModules<ET, I, S>,
+    state: Option<&mut S>,
+    id: u64,
+    pc: GuestAddr,
+    addr: GuestAddr,
+    _size: usize,
+) where
+    S: Unpin + HasMetadata,
+{
+    let _ = (modules, state, id);
+    if watched(addr) {
+        let lr: u32 = qemu.current_cpu().unwrap().read_reg(Regs::Lr).unwrap();
+        log::info!("READWATCH pc={pc:#x} lr={lr:#x} addr={addr:#x} (n)");
     }
 }

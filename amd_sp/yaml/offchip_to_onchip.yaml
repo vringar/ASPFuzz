@@ -1,0 +1,76 @@
+# Off-chip main epilogue -> on-chip return prototype (psp-etl #695).
+# main (0x116c) calls cold_boot (0x153a) and warm_boot (0x1542), then pops at
+# 0x1546 and returns to the on-chip BL (call_off_chip is entered with bx, LR
+# stays the caller: 0xffff2e6c, then the parent returns to 0xffff0400 -> wfi at
+# 0xffff04d4). The on-chip ROM has no literal reference to the $RA2 table
+# (0x11bc0), so injecting it here only exercises the return path.
+qemu:
+  zen: "Zen2"
+  on_chip_bl_path: "bins/on-chip-bl-Ryzen-Zen2-Desktop"
+
+debug: false
+flash:
+  size: 0x1000000
+  base: "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
+
+input:
+  flash:
+    # no flash input: an empty base list skips the flash seed extraction
+    base: []
+    input: []
+  psp:
+    input:
+      # n (0x11bc4) and the 16 slots (0x11bc8..0x11cc8)
+      - addr: 0x11bc4
+        size: 0x104
+
+harness:
+  start: 0x1546 # main epilogue (after cold_boot and warm_boot)
+  sinks:
+    - 0xffff04d4 # on-chip: wfi after the parent returns from the off-chip BL
+    - 0xffff0468 # on-chip: wfi poll loop
+    - 0xffff05c0 # on_chip_bl_post_status_code_maybe (wfi)
+    - 0x7274  # psp_sts_report_and_hang_on_error: hang loop (codes 1..0x9f only; >=0xa0 are progress reports that return)
+    - 0x2ec   # infty_loop
+
+tunnels:
+  # delay(ticks) at 0xc430 busy-waits on the PSP timer counter; skip it (ticks := 0)
+  - addr: 0xc436
+    action: SetConstant
+    target: R0
+    value: 0x0
+  # The type-0x70 ($BL2 dir) lookup (bl 0x1080 at 0x3198) returns 0x22 (not
+  # found) on this flash, so the dir is never read. Force success and the
+  # $BL2 flash offset (the dir pointer is in the 2nd-half BHD at 0x4ea000).
+  - addr: 0x319c   # before movs r4,r0
+    action: SetConstant
+    target: R0
+    value: 0x0
+  - addr: 0x31a8   # after ldr r1,[sp,#4]: header read src
+    action: SetConstant
+    target: R1
+    value: 0x4eb000
+  - addr: 0x31d6   # after ldr r1,[sp,#4]: entry table read src (+16 follows)
+    action: SetConstant
+    target: R1
+    value: 0x4eb000
+  # bl 0x180c (fletcher32) at 0x3202 returns to 0x3206, which loads the stored
+  # checksum into r1; 0x3208 is cmp r1,r0 -> make computed (r0) := stored (r1)
+  - addr: 0x3208
+    action: CopyRegister
+    target: R0
+    source: R1
+
+crashes:
+  breakpoints:
+  mmap:
+    no_exec:
+    ccp_memcopy_addr: 0x0
+    forbidden_memcopies:
+    forbidden_writes:
+
+snapshot:
+  default: "SuperLazy"
+  on_crash: "HardReset"
+  periodically: "RustSnapshot"
+  period: 100000
