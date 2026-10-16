@@ -1,0 +1,63 @@
+# Off-chip BL harness: fuzz the $BL2 directory parsed by psp_flash_get_bhd_dir
+qemu:
+  zen: "Zen2"
+  on_chip_bl_path: "bins/on-chip-bl-Ryzen-Zen2-Desktop"
+
+debug: false
+flash:
+  size: 0x1000000
+  base: "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
+
+input:
+  flash:
+    base:
+      - "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
+    input:
+      # $BL2 directory: fletcher32 + count + entries (magic at 0x4eb000 left intact)
+      - addr: 0x004eb004
+        size: 0x100
+
+harness:
+  # psp_flash_get_bhd_dir
+  start: 0x317c
+  sinks:
+    - 0x1484  # normal return into main
+    - 0x723c  # psp_sts_report_and_hang_on_error
+    - 0x2ec   # infty_loop
+
+tunnels:
+  # The type-0x70 ($BL2 dir) lookup (bl 0x1080 at 0x3198) returns 0x22 (not
+  # found) on this flash, so the dir is never read. Force success and the
+  # $BL2 flash offset (the dir pointer is in the 2nd-half BHD at 0x4ea000).
+  - addr: 0x319c   # before movs r4,r0
+    action: SetConstant
+    target: R0
+    value: 0x0
+  - addr: 0x31a8   # after ldr r1,[sp,#4]: header read src
+    action: SetConstant
+    target: R1
+    value: 0x4eb000
+  - addr: 0x31d6   # after ldr r1,[sp,#4]: entry table read src (+16 follows)
+    action: SetConstant
+    target: R1
+    value: 0x4eb000
+  # bl 0x180c (fletcher32) at 0x3202 returns to 0x3206, which loads the stored
+  # checksum into r1; 0x3208 is cmp r1,r0 -> make computed (r0) := stored (r1)
+  - addr: 0x3208
+    action: CopyRegister
+    target: R0
+    source: R1
+
+crashes:
+  breakpoints:
+  mmap:
+    no_exec:
+    ccp_memcopy_addr: 0x0
+    forbidden_memcopies:
+    forbidden_writes:
+
+snapshot:
+  default: "SuperLazy"
+  on_crash: "HardReset"
+  periodically: "RustSnapshot"
+  period: 100000

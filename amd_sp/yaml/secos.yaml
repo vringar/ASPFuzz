@@ -25,9 +25,7 @@ input:
     mbox_low: 0x00000000
     size: 272
   initial_inputs:
-    - /home/maximilian/Documents/uni/Fuzzer/ASPFuzz/amd_sp/sample_inputs
-    - /run/media/maximilian/DataSSD/Uni/Fuzzer/ASPFuzz/amd_sp/sample_inputs
-  # - /root/PSPFuzzer/ASPFuzz/amd_sp/runs/sample_inputs
+    - sample_inputs
 
 harness:
   # use mailbox entry point for now
@@ -85,12 +83,6 @@ tunnels:
 #    target: R0
 #    value: 0x0
 
-
-# skip syscall to not wait for event 0x19
-  - addr: 0xe101d8
-    action: PermaJump
-    source: 0xe101da
-    target: 0xe101dc
 
 # set fuse to actually write service page
   - addr: 0xd29a
