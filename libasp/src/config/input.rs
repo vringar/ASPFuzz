@@ -169,7 +169,7 @@ impl InputConfig {
         self.setup_input_dir(input_dir);
         // Create a default input if there are no inputs or all other inputs are wins
         let mut new_input_path = PathBuf::from(&input_dir);
-        new_input_path.push("input0000");
+        new_input_path.push("input_zero");
         fs::write(new_input_path, vec![0_u8; input_total_size]).unwrap();
         log::info!("Input Size is {}", self.total_size());
     }
@@ -309,5 +309,36 @@ impl InputConfig {
     #[must_use]
     pub fn has_mailbox(&self) -> bool {
         self.mailbox.unwrap_or(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn initial_inputs_keep_extracted_seed_and_zero_default() {
+        let dir = std::env::temp_dir().join(format!("libasp_input_test_{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let base = dir.join("base.bin");
+        let image: Vec<u8> = (0..=255).collect();
+        fs::write(&base, &image).unwrap();
+
+        let conf: InputConfig = serde_yaml::from_str(&format!(
+            "flash:\n  base: [{}]\n  input:\n    - {{addr: 0x10, size: 4}}\n    - {{addr: 0x80, size: 2}}\nmailbox_config: null\n",
+            base.display()
+        ))
+        .unwrap();
+
+        let out = dir.join("inputs");
+        fs::create_dir_all(&out).unwrap();
+        conf.create_initial_inputs(0x1000, &out);
+
+        assert_eq!(
+            fs::read(out.join("input0000")).unwrap(),
+            [0x10, 0x11, 0x12, 0x13, 0x80, 0x81]
+        );
+        assert_eq!(fs::read(out.join("input_zero")).unwrap(), [0_u8; 6]);
+        fs::remove_dir_all(&dir).unwrap();
     }
 }
