@@ -1,0 +1,109 @@
+# Boot-args validator harness (userland blob fn 0xe04f00).
+# The validator is not reached in the normal SecOS run, so the harness patches a
+# 'bl 0xe04f00' over the instruction at the snapshot PC 0xe07bb4 (right after the
+# boot-args page copy, patched from the blx at 0xe07bb0 before it is translated).
+# The fuzzed $RA2 table (magic, n, 16 slots) is injected at VA 0xe873a4 (= G+0x52c).
+qemu:
+  # Zen generation to emulate
+  zen: "Zen2"
+  # On-chip bootloader to use
+  on_chip_bl_path: "bins/on-chip-bl-Ryzen-Zen2-Desktop"
+# Flash informations
+flash:
+  # Size of flash memory
+  size: 0x1000000
+  # Base image in flash memory
+  base: "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
+
+debug: false
+fixed_length_mutators: true
+input:
+  flash:
+    # nothing
+  x86:
+    # nothing
+  psp:
+    input:
+      - addr: 0xe873a4
+        size: 0x108
+  mailbox: false
+  initial_inputs:
+    # word0 = cmd << 16 (bit 31 clear = pending), then 272 zero bytes
+    - sample_inputs_bootargs
+
+harness:
+  # first PC after the app init (all IRQs attached, threads created)
+  start: 0xe07bb4
+  sinks:
+    - 0x00e07bba # first PC after the validator returned (R0 logged at 0xe07bb8)
+    - 0x00000ef6
+    - 0x00001db2 # wfi
+
+
+# Tunnels describe any fixup that has to happen during execution
+# at a certain address
+# Jumps are very finicky
+# Jump to early and the TB will crash
+# Jump to late and there will be Data Aborts
+# The positions can change when upgrading QEMU
+tunnels:
+  - addr: 0xe07bb0
+    action: WriteMemory
+    target: 0xe07bb4
+    value: "0xfdf7a4f9" # thumb: bl 0xe04f00 (replaces svc 93 + ldr r6)
+  # fix function in x86_workloop
+  - addr: 0x9236
+    action: SetConstant
+    target: R0
+    value: 0x0
+  # overwrite of 0x100ac
+  - addr: 0x6988
+    action: SetConstant
+    target: R0
+    value: 0x1
+  # SKIP ABL
+  - addr: 0x2938   # When the overwriting happens
+    action: Jump
+    source: 0x2a1c # what gets overwritten
+    target: 0x2a2a # where to jump to
+
+# set fuse to actually write service page
+  - addr: 0xd29a
+    action: SetConstant
+    target: R0
+    value: 0x7
+
+  # set mmapfunc return to 0 instead of 0x34
+  - addr: 0x202a50
+    action: SetConstant
+    target: R0
+    value: 0x0
+
+  # Jump over Syscall
+  - addr: 0x200e4a
+    action: PermaJump
+    source: 0x200e68
+    target: 0x200e6a
+
+
+
+#TODO: fix that if breakpoint is within code executed before harness, fuzzer will break
+crashes:
+  breakpoints:
+    # - 0x201b46
+  mmap:
+    no_exec:
+    ccp_memcopy_addr: 0x0
+    forbidden_memcopies:
+    forbidden_writes:
+      - begin: 0x200000
+        end: 0x203660
+    x86:
+      start: 0xfffd00000000
+      end: 0xffffffffffff
+
+snapshot:
+  default: "SuperLazy"
+  on_crash: "HardReset"
+  periodically: "RustSnapshot"
+  period: 100000
