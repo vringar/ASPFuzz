@@ -64,14 +64,20 @@ const POOL: &[u32] = &[
 pub struct MailboxFieldMutator {
     /// byte offset of the command word inside the input
     offset: usize,
-    /// size of the argument buffer following the word
+    /// size of the argument buffer following the word (and the pointers, if present)
     len: usize,
+    /// input carries CmdRspBufAddr lo/hi right behind the word
+    ptr_fields: bool,
 }
 
 impl MailboxFieldMutator {
     #[must_use]
-    pub fn new(offset: usize, len: usize) -> Self {
-        Self { offset, len }
+    pub fn new(offset: usize, len: usize, ptr_fields: bool) -> Self {
+        Self {
+            offset,
+            len,
+            ptr_fields,
+        }
     }
 
     fn value<R: Rand>(rand: &mut R) -> u32 {
@@ -100,9 +106,9 @@ impl Named for MailboxFieldMutator {
 
 impl<S: HasRand> Mutator<BytesInput, S> for MailboxFieldMutator {
     fn mutate(&mut self, state: &mut S, input: &mut BytesInput) -> Result<MutationResult, Error> {
-        let (off, len) = (self.offset, self.len);
+        let (off, len, ptr) = (self.offset, self.len, self.ptr_fields);
         let bytes = input.mutator_bytes_mut();
-        if bytes.len() < off + 4 + len {
+        if bytes.len() < off + 4 + if ptr { 8 } else { 0 } + len {
             return Ok(MutationResult::Skipped);
         }
         let rand = state.rand_mut();
@@ -127,6 +133,30 @@ impl<S: HasRand> Mutator<BytesInput, S> for MailboxFieldMutator {
             bytes[off..off + 4].copy_from_slice(&new_word.to_le_bytes());
             return Ok(MutationResult::Mutated);
         }
+        if ptr && rand.next() % 3 == 0 {
+            // CmdRspBufAddr lo/hi: the mapper keeps the low 12 bits; x86 slots span 0x0400_0000..0xfc00_0000,
+            // secure DRAM is 0xfffd_fb00_0000 (librarian catalog)
+            let lo = match rand.next() % 4 {
+                0 => 0xfb00_0000 | ((rand.next() as u32) & 0xfff),
+                1 => {
+                    0x0400_0000
+                        + (((rand.next() as u32) % 0xf8) << 20)
+                        + ((rand.next() as u32) & 0xfff)
+                }
+                2 => (rand.next() as u32) & 0xffff_f000, // aligned
+                _ => Self::value(rand),
+            };
+            let hi = match rand.next() % 4 {
+                0 => 0xfffd,
+                1 => 0,
+                2 => 1 << (rand.next() % 16),
+                _ => (rand.next() as u32) & 0xffff,
+            };
+            let at = off + 4 + 4 * (rand.next() as usize % 2);
+            let v = if at == off + 4 { lo } else { hi };
+            bytes[at..at + 4].copy_from_slice(&v.to_le_bytes());
+            return Ok(MutationResult::Mutated);
+        }
         let dwords = len / 4;
         if dwords == 0 {
             return Ok(MutationResult::Skipped);
@@ -137,7 +167,7 @@ impl<S: HasRand> Mutator<BytesInput, S> for MailboxFieldMutator {
         } else {
             (rand.next() as usize) % dwords.min(16)
         };
-        let at = off + 4 + idx * 4;
+        let at = off + 4 + if ptr { 8 } else { 0 } + idx * 4;
         bytes[at..at + 4].copy_from_slice(&Self::value(rand).to_le_bytes());
         Ok(MutationResult::Mutated)
     }

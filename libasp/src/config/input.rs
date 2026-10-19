@@ -96,11 +96,15 @@ pub struct MailboxConfig {
     mbox_high: u32,
     mbox_low: u32,
     size: usize,
+    /// Take CmdRspBufAddr lo/hi from the input too: layout `[word][lo][hi][buffer]`
+    /// (the buffer is still placed at `mbox_high:mbox_low`)
+    #[serde(default)]
+    fuzz_pointers: bool,
 }
 
 impl MailboxConfig {
     fn size(&self) -> usize {
-        self.size
+        self.size + if self.fuzz_pointers { 8 } else { 0 }
     }
 }
 
@@ -260,6 +264,33 @@ impl InputConfig {
         if let Some(true) = self.mailbox {
             let lower: u32;
             let higher: u32;
+            let mbox_word = |buf: &mut &[u8]| {
+                buf.read_u32::<LittleEndian>()
+                    .expect("Not enough bytes for mailbox")
+            };
+            if let Some(content) = self.mailbox_config.as_ref().filter(|c| c.fuzz_pointers) {
+                // [word][lo][hi][buffer]
+                let word = mbox_word(&mut target_buf);
+                lower = mbox_word(&mut target_buf);
+                higher = mbox_word(&mut target_buf) & 0x0000_ffff;
+                write_mailbox_value(
+                    cpu,
+                    MailboxValues {
+                        mbox: word,
+                        ptr_lower: lower,
+                        ptr_higher: higher,
+                    },
+                )
+                .expect("Failed to write to mailbox");
+                let x86_buf = &target_buf[..content.size];
+                target_buf = &target_buf[content.size..];
+                let target_addr = ((content.mbox_high as GuestPhysAddr) << 32)
+                    + (content.mbox_low as GuestPhysAddr);
+                write_x86_mem(cpu, target_addr, x86_buf).expect("Failed to write to memory");
+                qemu.flush_jit();
+                assert!(target_buf.is_empty());
+                return;
+            }
             if let Some(content) = self.mailbox_config.as_ref() {
                 log::info!("Mailbox content: {:?}", content);
                 lower = content.mbox_low;
@@ -306,11 +337,11 @@ impl InputConfig {
         assert!(target_buf.is_empty());
     }
 
-    /// (byte offset of the mailbox command word in the input, size of the argument buffer behind it)
+    /// (byte offset of the mailbox command word in the input, size of the argument buffer, pointers in input)
     #[must_use]
-    pub fn mailbox_layout(&self) -> Option<(usize, usize)> {
+    pub fn mailbox_layout(&self) -> Option<(usize, usize, bool)> {
         let cfg = self.mailbox_config.as_ref()?;
-        Some((self.total_size() - cfg.size - 4, cfg.size))
+        Some((self.total_size() - cfg.size() - 4, cfg.size, cfg.fuzz_pointers))
     }
 
     #[must_use]
