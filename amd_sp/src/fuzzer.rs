@@ -347,7 +347,7 @@ pub fn fuzz() -> Result<(), Error> {
 
         // A fuzzer with feedbacks and a corpus scheduler
         let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
-        let timeout = Duration::from_secs(10);
+        let timeout = Duration::from_millis(conf.yaml_config.timeout_ms.unwrap_or(10_000));
 
         // Create a QEMU in-process executor
         let mut executor = QemuExecutor::new(

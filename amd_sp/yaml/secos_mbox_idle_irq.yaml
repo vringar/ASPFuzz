@@ -28,6 +28,7 @@ flash:
   base: "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
 
 debug: true
+timeout_ms: 500
 structured_mailbox: true
 input:
   flash:
