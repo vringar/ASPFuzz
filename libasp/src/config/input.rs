@@ -166,7 +166,7 @@ impl InputConfig {
                 }
             }
         }
-        self.setup_input_dir(input_dir);
+        let _ = self.setup_input_dir(input_dir);
         // Create a default input if there are no inputs or all other inputs are wins
         let mut new_input_path = PathBuf::from(&input_dir);
         new_input_path.push("input_zero");
@@ -304,6 +304,13 @@ impl InputConfig {
         }
         qemu.flush_jit();
         assert!(target_buf.is_empty());
+    }
+
+    /// (byte offset of the mailbox command word in the input, size of the argument buffer behind it)
+    #[must_use]
+    pub fn mailbox_layout(&self) -> Option<(usize, usize)> {
+        let cfg = self.mailbox_config.as_ref()?;
+        Some((self.total_size() - cfg.size - 4, cfg.size))
     }
 
     #[must_use]

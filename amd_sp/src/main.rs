@@ -1,6 +1,7 @@
 //mod client;
 #[cfg(target_os = "linux")]
 mod fuzzer;
+mod mailbox_mutator;
 mod setup;
 
 use libafl::Error;

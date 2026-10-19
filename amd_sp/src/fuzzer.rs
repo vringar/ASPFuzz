@@ -3,6 +3,7 @@
 use core::{ptr::addr_of_mut, time::Duration};
 use std::process;
 
+use crate::mailbox_mutator::MailboxFieldMutator;
 use crate::setup::{parse_args, setup_directory_structure};
 use libafl::{
     corpus::{CachedOnDiskCorpus, Corpus, OnDiskCorpus},
@@ -65,12 +66,9 @@ pub type MyState =
 pub fn fuzz() -> Result<(), Error> {
     //env_logger::init();
 
-
-
     fn init_logger() {
         use env_logger::{Builder, Env};
         use std::io::Write;
-
 
         let env = Env::default();
 
@@ -80,8 +78,7 @@ pub fn fuzz() -> Result<(), Error> {
                 // preferred styling crate.
                 let warn_style = buf.default_level_style(log::Level::Warn);
                 let timestamp = buf.timestamp();
-                let threadid =
-                    process::id();
+                let threadid = process::id();
 
                 writeln!(
                     buf,
@@ -191,6 +188,8 @@ pub fn fuzz() -> Result<(), Error> {
             emulator.create_fast_snapshot(true)
         };
         log::error!("Snapshot created");
+        // opt-in: log the mailbox command word before and after each iteration
+        let log_mbox = std::env::var_os("ASPFUZZ_LOG_MBOX").is_some();
         // The wrapped harness function, calling out to the LLVM-style harness
         let mut harness = |emulator: &mut Emulator<_, _, _, _, _, MyState, _>,
                            state: &mut MyState,
@@ -206,16 +205,27 @@ pub fn fuzz() -> Result<(), Error> {
                 StdAddressFilter::allow_list(vec![]),
             );
             conf.yaml_config.input.apply_input(input);
+            let sent_word = if log_mbox {
+                read_mailbox_value(&qemu.cpu_from_index(0).unwrap()).map_or(0, |v| v.mbox)
+            } else {
+                0
+            };
             log::error!("Starting QEMU");
             unsafe {
                 let res = emulator.qemu().run();
                 // TODO: Figure out how do do this in an observer
                 // Doing this in an EmulatorModule results in a read after the snapshot has been restored
                 state.metadata_map_mut().insert(RegisterMetadata::new(qemu));
-                state.add_metadata(MiscMetadata {
-                    mailbox_values: read_mailbox_value(&qemu.cpu_from_index(0).unwrap())
-                        .expect("Failed to read mailbox"),
-                });
+                let mailbox_values = read_mailbox_value(&qemu.cpu_from_index(0).unwrap())
+                    .expect("Failed to read mailbox");
+                if log_mbox {
+                    log::error!(
+                        "mailbox in={:#010x} out={:#010x}",
+                        sent_word,
+                        mailbox_values.mbox
+                    );
+                }
+                state.add_metadata(MiscMetadata { mailbox_values });
 
                 match res {
                     Ok(QemuExitReason::Breakpoint(_)) => {} // continue execution, nothing to do there.
@@ -370,7 +380,30 @@ pub fn fuzz() -> Result<(), Error> {
         }
 
         // Setup an havoc mutator with a mutational stage
-        if conf.yaml_config.fixed_length_mutators {
+        if let (true, Some((off, len))) = (
+            conf.yaml_config.structured_mailbox,
+            conf.yaml_config.input.mailbox_layout(),
+        ) {
+            // length-preserving havoc subset plus field-aware mailbox mutators
+            let mutator = HavocScheduledMutator::new(tuple_list!(
+                BitFlipMutator::new(),
+                ByteFlipMutator::new(),
+                ByteRandMutator::new(),
+                ByteInterestingMutator::new(),
+                WordInterestingMutator::new(),
+                DwordInterestingMutator::new(),
+                BytesRandSetMutator::new(),
+                CrossoverReplaceMutator::new(),
+                MailboxFieldMutator::new(off, len),
+                MailboxFieldMutator::new(off, len),
+                MailboxFieldMutator::new(off, len),
+                MailboxFieldMutator::new(off, len),
+                MailboxFieldMutator::new(off, len),
+                MailboxFieldMutator::new(off, len),
+            ));
+            let mut stages = tuple_list!(StdMutationalStage::new(mutator));
+            fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;
+        } else if conf.yaml_config.fixed_length_mutators {
             // havoc without the length-changing mutators (insert/delete/expand)
             let mutator = HavocScheduledMutator::new(tuple_list!(
                 BitFlipMutator::new(),

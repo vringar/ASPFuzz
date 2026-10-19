@@ -121,6 +121,9 @@ pub struct YAMLConfig {
     /// Use only mutators that keep the input length (no insert/delete/expand)
     #[serde(default)]
     pub fixed_length_mutators: bool,
+    /// Add field-aware mailbox mutators (command id, framing, argument dwords); needs `input.mailbox_config`
+    #[serde(default)]
+    pub structured_mailbox: bool,
     pub qemu: QemuConf,
     pub flash: FlashConfig,
     pub input: InputConfig,
