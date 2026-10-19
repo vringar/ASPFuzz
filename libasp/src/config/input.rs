@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::{fs, vec};
 
 use crate::config::get_run_conf;
-use crate::{write_flash_mem, write_mailbox_value, write_x86_mem, MailboxValues};
+use crate::{inject_irq, write_flash_mem, write_mailbox_value, write_x86_mem, MailboxValues};
 
 #[derive(Clone, Deserialize, Debug)]
 pub struct InputLocation {
@@ -108,6 +108,14 @@ impl MailboxConfig {
     }
 }
 
+/// Interrupt injection driven by the input: `slots` trailing input bytes, each selects what to raise
+/// before the run (0 = nothing, n = `ids[(n - 1) % ids.len()]`, ids are group*32+bit).
+#[derive(Clone, Deserialize, Debug)]
+pub struct IrqConfig {
+    ids: Vec<u32>,
+    slots: usize,
+}
+
 /// Describes the entrirety of the fuzzable inputs
 /// This includes the flash memory, x86 memory and psp memory
 #[derive(Clone, Deserialize, Debug)]
@@ -121,6 +129,8 @@ pub struct InputConfig {
     #[serde(default)]
     mailbox: Option<bool>,
     mailbox_config: Option<MailboxConfig>,
+    #[serde(default)]
+    irq: Option<IrqConfig>,
     initial_inputs: Option<Vec<PathBuf>>,
 }
 
@@ -136,6 +146,11 @@ impl InputConfig {
             } else {
                 0
             }
+            + self.irq_size()
+    }
+
+    fn irq_size(&self) -> usize {
+        self.irq.as_ref().map_or(0, |i| i.slots)
     }
 }
 
@@ -237,7 +252,8 @@ impl InputConfig {
         }
         let mut tmp_vec = Vec::from(input_bytes);
         tmp_vec.resize(self.total_size(), 0); // TODO: allow for variable length maybe
-        let mut target_buf = tmp_vec.as_slice();
+        let (body, irq_bytes) = tmp_vec.split_at(tmp_vec.len() - self.irq_size());
+        let mut target_buf = body;
         if let Some(flash) = self.flash.as_ref() {
             let flash_buf = &target_buf[..flash.size()];
             target_buf = &target_buf[flash.size()..];
@@ -287,8 +303,9 @@ impl InputConfig {
                 let target_addr = ((content.mbox_high as GuestPhysAddr) << 32)
                     + (content.mbox_low as GuestPhysAddr);
                 write_x86_mem(cpu, target_addr, x86_buf).expect("Failed to write to memory");
-                qemu.flush_jit();
                 assert!(target_buf.is_empty());
+                self.inject_irqs(irq_bytes);
+                qemu.flush_jit();
                 return;
             }
             if let Some(content) = self.mailbox_config.as_ref() {
@@ -333,15 +350,39 @@ impl InputConfig {
                 // println!("{}", hex::encode(sanity_check));
             }
         }
-        qemu.flush_jit();
         assert!(target_buf.is_empty());
+        self.inject_irqs(irq_bytes);
+        qemu.flush_jit();
+    }
+
+    fn inject_irqs(&self, selectors: &[u8]) {
+        let Some(irq) = self.irq.as_ref().filter(|i| !i.ids.is_empty()) else {
+            return;
+        };
+        for &sel in selectors.iter().filter(|&&b| b != 0) {
+            let id = irq.ids[(usize::from(sel) - 1) % irq.ids.len()];
+            if let Err(e) = inject_irq(id) {
+                log::error!("irq inject {id:#x} failed: {e:?}");
+            }
+        }
     }
 
     /// (byte offset of the mailbox command word in the input, size of the argument buffer, pointers in input)
     #[must_use]
     pub fn mailbox_layout(&self) -> Option<(usize, usize, bool)> {
         let cfg = self.mailbox_config.as_ref()?;
-        Some((self.total_size() - cfg.size() - 4, cfg.size, cfg.fuzz_pointers))
+        Some((
+            self.total_size() - self.irq_size() - cfg.size() - 4,
+            cfg.size,
+            cfg.fuzz_pointers,
+        ))
+    }
+
+    /// (byte offset of the irq selector bytes, number of selectors, number of selectable ids)
+    #[must_use]
+    pub fn irq_layout(&self) -> Option<(usize, usize, usize)> {
+        let irq = self.irq.as_ref().filter(|i| !i.ids.is_empty() && i.slots > 0)?;
+        Some((self.total_size() - irq.slots, irq.slots, irq.ids.len()))
     }
 
     #[must_use]

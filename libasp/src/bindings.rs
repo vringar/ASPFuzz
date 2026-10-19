@@ -17,6 +17,7 @@ extern "C" {
     fn aspfuzz_x86_read(addr: hwaddr, buf: *mut u8, len: hwaddr) -> i32;
     fn aspfuzz_access_observer_activate(addr: hwaddr, size: hwaddr) -> i32;
     fn aspfuzz_access_observer_reset() -> i32;
+    fn aspfuzz_irq_inject(id: u32) -> i32;
     /// This is a little tricky to use because we will always just write back
     /// the value in our current struct, so we need to treat 0 as a special case
     fn aspfuzz_access_observer_status(get_read: bool, addr: *mut hwaddr, pc: *mut vaddr) -> i32;
@@ -26,6 +27,16 @@ extern "C" {
 /// and the flash memory is accessible
 pub unsafe fn write_flash_mem(addr: GuestAddr, buf: &[u8]) {
     aspfuzz_write_smn_flash(addr as hwaddr, buf.len().try_into().unwrap(), buf.as_ptr());
+}
+
+/// Raise interrupt `id` (group*32+bit) on the PSP interrupt controller; call only while the vCPU is stopped.
+pub fn inject_irq(id: u32) -> Result<(), Error> {
+    // SAFETY: plain by-value call; the C side takes the BQL and returns -1 if the IC is not realized
+    if unsafe { aspfuzz_irq_inject(id) } == 0 {
+        Ok(())
+    } else {
+        Err(Error::illegal_state("IC not realized or irq id out of range"))
+    }
 }
 
 /// Provide the CPU as proof that QEMU has been initialized and is halted

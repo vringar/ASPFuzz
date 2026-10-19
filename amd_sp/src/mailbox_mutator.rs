@@ -68,6 +68,8 @@ pub struct MailboxFieldMutator {
     len: usize,
     /// input carries CmdRspBufAddr lo/hi right behind the word
     ptr_fields: bool,
+    /// (offset, count, n_ids) of the irq selector bytes, if the input has any
+    irq: Option<(usize, usize, usize)>,
 }
 
 impl MailboxFieldMutator {
@@ -77,7 +79,14 @@ impl MailboxFieldMutator {
             offset,
             len,
             ptr_fields,
+            irq: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_irq(mut self, irq: Option<(usize, usize, usize)>) -> Self {
+        self.irq = irq;
+        self
     }
 
     fn value<R: Rand>(rand: &mut R) -> u32 {
@@ -112,6 +121,14 @@ impl<S: HasRand> Mutator<BytesInput, S> for MailboxFieldMutator {
             return Ok(MutationResult::Skipped);
         }
         let rand = state.rand_mut();
+        if let Some((at, count, n_ids)) = self.irq {
+            // 1 in 4 mutations: change one irq selector (0 = none, 1..=n_ids = that id)
+            if bytes.len() >= at + count && rand.next() % 4 == 0 {
+                let i = at + (rand.next() as usize) % count;
+                bytes[i] = (rand.next() as usize % (n_ids + 1)) as u8;
+                return Ok(MutationResult::Mutated);
+            }
+        }
         let word = u32::from_le_bytes(bytes[off..off + 4].try_into().unwrap());
         let new_word = match rand.next() % 6 {
             // new command id from the known list, keep framing

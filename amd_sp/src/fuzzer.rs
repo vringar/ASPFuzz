@@ -380,6 +380,7 @@ pub fn fuzz() -> Result<(), Error> {
         }
 
         // Setup an havoc mutator with a mutational stage
+        let irq = conf.yaml_config.input.irq_layout();
         if let (true, Some((off, len, ptr))) = (
             conf.yaml_config.structured_mailbox,
             conf.yaml_config.input.mailbox_layout(),
@@ -394,12 +395,12 @@ pub fn fuzz() -> Result<(), Error> {
                 DwordInterestingMutator::new(),
                 BytesRandSetMutator::new(),
                 CrossoverReplaceMutator::new(),
-                MailboxFieldMutator::new(off, len, ptr),
-                MailboxFieldMutator::new(off, len, ptr),
-                MailboxFieldMutator::new(off, len, ptr),
-                MailboxFieldMutator::new(off, len, ptr),
-                MailboxFieldMutator::new(off, len, ptr),
-                MailboxFieldMutator::new(off, len, ptr),
+                MailboxFieldMutator::new(off, len, ptr).with_irq(irq),
+                MailboxFieldMutator::new(off, len, ptr).with_irq(irq),
+                MailboxFieldMutator::new(off, len, ptr).with_irq(irq),
+                MailboxFieldMutator::new(off, len, ptr).with_irq(irq),
+                MailboxFieldMutator::new(off, len, ptr).with_irq(irq),
+                MailboxFieldMutator::new(off, len, ptr).with_irq(irq),
             ));
             let mut stages = tuple_list!(StdMutationalStage::new(mutator));
             fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;
