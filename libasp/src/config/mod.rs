@@ -141,6 +141,12 @@ pub fn init_global_conf(
     verify_reset_device: Option<String>,
 ) {
     let yaml = YAMLConfig::new(config_path);
+    log::warn!(
+        "snapshot.default/on_crash/periodically ({:?}/{:?}/{:?}) are parsed but ignored: the fast snapshot is always used",
+        yaml.snapshot.default,
+        yaml.snapshot.on_crash,
+        yaml.snapshot.periodically
+    );
 
     CONF.set(RunConfig {
         yaml_config: yaml,

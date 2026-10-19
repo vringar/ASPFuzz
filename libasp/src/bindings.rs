@@ -52,7 +52,7 @@ pub fn read_x86_mem(
     len: GuestPhysAddr,
 ) -> Result<(), Error> {
     // the C side writes `len` bytes through the pointer
-    if len > buf.len() as GuestPhysAddr {
+    if GuestPhysAddr::try_from(buf.len()).map_or(true, |blen| len > blen) {
         return Err(Error::illegal_state("x86 read length exceeds the buffer"));
     }
     let i = unsafe { aspfuzz_x86_read(addr, buf.as_mut_ptr(), len) };
