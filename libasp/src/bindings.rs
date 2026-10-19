@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 // These need to be kept in sync with the functions in the emulator repository
 extern "C" {
-    fn aspfuzz_write_smn_flash(addr: hwaddr, len: hwaddr, buf: *mut u8);
+    fn aspfuzz_write_smn_flash(addr: hwaddr, len: hwaddr, buf: *const u8);
     fn aspfuzz_x86_write(addr: hwaddr, buf: *mut u8, len: hwaddr) -> i32;
     fn aspfuzz_x86_read(addr: hwaddr, buf: *mut u8, len: hwaddr) -> i32;
     fn aspfuzz_access_observer_activate(addr: hwaddr, size: hwaddr) -> i32;
@@ -25,11 +25,7 @@ extern "C" {
 /// This function should only be called if QEMU has been fully initialized
 /// and the flash memory is accessible
 pub unsafe fn write_flash_mem(addr: GuestAddr, buf: &[u8]) {
-    aspfuzz_write_smn_flash(
-        addr as hwaddr,
-        buf.len().try_into().unwrap(),
-        buf.as_ptr().cast_mut(),
-    );
+    aspfuzz_write_smn_flash(addr as hwaddr, buf.len().try_into().unwrap(), buf.as_ptr());
 }
 
 /// Provide the CPU as proof that QEMU has been initialized and is halted
@@ -55,6 +51,10 @@ pub fn read_x86_mem(
     buf: &mut [u8],
     len: GuestPhysAddr,
 ) -> Result<(), Error> {
+    // the C side writes `len` bytes through the pointer
+    if len > buf.len() as GuestPhysAddr {
+        return Err(Error::illegal_state("x86 read length exceeds the buffer"));
+    }
     let i = unsafe { aspfuzz_x86_read(addr, buf.as_mut_ptr(), len) };
     if i == 0 {
         Ok(())
