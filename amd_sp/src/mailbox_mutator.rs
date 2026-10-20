@@ -3,15 +3,23 @@
 //! Operates on the flat byte input (corpus format unchanged) but mutates by field:
 //! command id (bits 23:16), the word framing (pending/response bits), and aligned
 //! u32 arguments drawn from a pool of interesting values.
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
 
 use libafl::{
-    inputs::{BytesInput, HasMutatorBytes},
-    mutators::{MutationResult, Mutator},
+    inputs::{BytesInput, BytesSubInput, HasMutatorBytes},
+    mutators::{
+        mutations::{
+            BitFlipMutator, ByteAddMutator, ByteFlipMutator, ByteInterestingMutator,
+            ByteRandMutator, BytesRandSetMutator, DwordInterestingMutator, WordAddMutator,
+            WordInterestingMutator,
+        },
+        MutationResult, Mutator,
+    },
     state::HasRand,
     Error,
 };
 use libafl_bolts::{rands::Rand, Named};
+use libasp::mailbox_dict::MailboxDict;
 
 /// Command ids of the Zen2 SecOS BIOS->PSP handler 0x200b4c (psp-etl #835): handled ids, then
 /// ids that fall through to the default (status 4) or id 4 (status 8) as negative controls.
@@ -70,6 +78,7 @@ pub struct MailboxFieldMutator {
     ptr_fields: bool,
     /// (offset, count, n_ids) of the irq selector bytes, if the input has any
     irq: Option<(usize, usize, usize)>,
+    dict: Option<Arc<MailboxDict>>,
 }
 
 impl MailboxFieldMutator {
@@ -80,7 +89,14 @@ impl MailboxFieldMutator {
             len,
             ptr_fields,
             irq: None,
+            dict: None,
         }
+    }
+
+    #[must_use]
+    pub fn with_dict(mut self, dict: Option<Arc<MailboxDict>>) -> Self {
+        self.dict = dict;
+        self
     }
 
     #[must_use]
@@ -89,9 +105,14 @@ impl MailboxFieldMutator {
         self
     }
 
-    fn value<R: Rand>(rand: &mut R) -> u32 {
+    fn value<R: Rand>(&self, rand: &mut R) -> u32 {
         match rand.next() % 4 {
-            0 => POOL[(rand.next() as usize) % POOL.len()],
+            0 => match &self.dict {
+                Some(d) if !d.values.is_empty() && rand.next() % 2 == 0 => {
+                    d.values[(rand.next() as usize) % d.values.len()]
+                }
+                _ => POOL[(rand.next() as usize) % POOL.len()],
+            },
             1 => {
                 let p = 1u32 << (rand.next() % 32);
                 match rand.next() % 3 {
@@ -133,8 +154,13 @@ impl<S: HasRand> Mutator<BytesInput, S> for MailboxFieldMutator {
         let new_word = match rand.next() % 6 {
             // new command id from the known list, keep framing
             0 => {
-                (word & !0x00ff_0000)
-                    | (KNOWN_CMDS[(rand.next() as usize) % KNOWN_CMDS.len()] << 16)
+                let cmd = match &self.dict {
+                    Some(d) if !d.commands.is_empty() => {
+                        d.commands[(rand.next() as usize) % d.commands.len()].id
+                    }
+                    _ => KNOWN_CMDS[(rand.next() as usize) % KNOWN_CMDS.len()],
+                };
+                (word & !0x00ff_0000) | ((cmd & 0xff) << 16)
             }
             // new random command id
             1 => (word & !0x00ff_0000) | (((rand.next() % 0x100) as u32) << 16),
@@ -161,7 +187,14 @@ impl<S: HasRand> Mutator<BytesInput, S> for MailboxFieldMutator {
                         + ((rand.next() as u32) & 0xfff)
                 }
                 2 => (rand.next() as u32) & 0xffff_f000, // aligned
-                _ => Self::value(rand),
+                _ => self.value(rand),
+            };
+            let lo = match &self.dict {
+                Some(d) if !d.buf_lo_low12.is_empty() && rand.next() % 3 == 0 => {
+                    (lo & !0xfff)
+                        | (d.buf_lo_low12[(rand.next() as usize) % d.buf_lo_low12.len()] & 0xfff)
+                }
+                _ => lo,
             };
             let hi = match rand.next() % 4 {
                 0 => 0xfffd,
@@ -174,6 +207,29 @@ impl<S: HasRand> Mutator<BytesInput, S> for MailboxFieldMutator {
             bytes[at..at + 4].copy_from_slice(&v.to_le_bytes());
             return Ok(MutationResult::Mutated);
         }
+        let arg_start = off + 4 + if ptr { 8 } else { 0 };
+        if let Some(d) = &self.dict {
+            // typed field of the current command (catalog arg layout), 1 in 2
+            let cmd = (u32::from_le_bytes(bytes[off..off + 4].try_into().unwrap()) >> 16) & 0xff;
+            let fields = d
+                .commands
+                .iter()
+                .find(|c| c.id == cmd)
+                .map_or(&[][..], |c| &c.fields[..]);
+            if !fields.is_empty() && rand.next() % 2 == 0 {
+                let f = &fields[(rand.next() as usize) % fields.len()];
+                if f.offset + f.size <= len && matches!(f.size, 1 | 4 | 8) {
+                    let v = if f.size == 8 {
+                        u64::from(self.value(rand)) | (u64::from(self.value(rand)) << 32)
+                    } else {
+                        u64::from(self.value(rand))
+                    };
+                    let at = arg_start + f.offset;
+                    bytes[at..at + f.size].copy_from_slice(&v.to_le_bytes()[..f.size]);
+                    return Ok(MutationResult::Mutated);
+                }
+            }
+        }
         let dwords = len / 4;
         if dwords == 0 {
             return Ok(MutationResult::Skipped);
@@ -185,8 +241,79 @@ impl<S: HasRand> Mutator<BytesInput, S> for MailboxFieldMutator {
             (rand.next() as usize) % dwords.min(16)
         };
         let at = off + 4 + if ptr { 8 } else { 0 } + idx * 4;
-        bytes[at..at + 4].copy_from_slice(&Self::value(rand).to_le_bytes());
+        bytes[at..at + 4].copy_from_slice(&self.value(rand).to_le_bytes());
         Ok(MutationResult::Mutated)
+    }
+
+    fn post_exec(
+        &mut self,
+        _state: &mut S,
+        _new_corpus_id: Option<libafl::corpus::CorpusId>,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+/// Stock length-preserving byte mutators applied only to the argument window `[start, start + len)`,
+/// leaving the command word, pointer words and trailing IRQ selector bytes alone.
+pub struct ArgWindowHavoc {
+    start: usize,
+    len: usize,
+    bit: BitFlipMutator,
+    flip: ByteFlipMutator,
+    rand: ByteRandMutator,
+    add: ByteAddMutator,
+    wadd: WordAddMutator,
+    bint: ByteInterestingMutator,
+    wint: WordInterestingMutator,
+    dint: DwordInterestingMutator,
+    set: BytesRandSetMutator,
+}
+
+impl ArgWindowHavoc {
+    #[must_use]
+    pub fn new(start: usize, len: usize) -> Self {
+        Self {
+            start,
+            len,
+            bit: BitFlipMutator::new(),
+            flip: ByteFlipMutator::new(),
+            rand: ByteRandMutator::new(),
+            add: ByteAddMutator::new(),
+            wadd: WordAddMutator::new(),
+            bint: ByteInterestingMutator::new(),
+            wint: WordInterestingMutator::new(),
+            dint: DwordInterestingMutator::new(),
+            set: BytesRandSetMutator::new(),
+        }
+    }
+}
+
+impl Named for ArgWindowHavoc {
+    fn name(&self) -> &Cow<'static, str> {
+        static NAME: Cow<'static, str> = Cow::Borrowed("ArgWindowHavoc");
+        &NAME
+    }
+}
+
+impl<S: HasRand> Mutator<BytesInput, S> for ArgWindowHavoc {
+    fn mutate(&mut self, state: &mut S, input: &mut BytesInput) -> Result<MutationResult, Error> {
+        if input.mutator_bytes().len() < self.start + self.len || self.len == 0 {
+            return Ok(MutationResult::Skipped);
+        }
+        let pick = state.rand_mut().next() % 9;
+        let mut win = BytesSubInput::new(input, self.start..self.start + self.len);
+        match pick {
+            0 => self.bit.mutate(state, &mut win),
+            1 => self.flip.mutate(state, &mut win),
+            2 => self.rand.mutate(state, &mut win),
+            3 => self.add.mutate(state, &mut win),
+            4 => self.wadd.mutate(state, &mut win),
+            5 => self.bint.mutate(state, &mut win),
+            6 => self.wint.mutate(state, &mut win),
+            7 => self.dint.mutate(state, &mut win),
+            _ => self.set.mutate(state, &mut win),
+        }
     }
 
     fn post_exec(

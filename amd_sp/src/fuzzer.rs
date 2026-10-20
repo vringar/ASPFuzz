@@ -3,7 +3,7 @@
 use core::{ptr::addr_of_mut, time::Duration};
 use std::process;
 
-use crate::mailbox_mutator::MailboxFieldMutator;
+use crate::mailbox_mutator::{ArgWindowHavoc, MailboxFieldMutator};
 use crate::setup::{parse_args, setup_directory_structure};
 use libafl::{
     corpus::{CachedOnDiskCorpus, Corpus, OnDiskCorpus},
@@ -381,6 +381,11 @@ pub fn fuzz() -> Result<(), Error> {
 
         // Setup an havoc mutator with a mutational stage
         let irq = conf.yaml_config.input.irq_layout();
+        let dict = conf
+            .yaml_config
+            .mailbox_dict
+            .as_deref()
+            .map(|p| std::sync::Arc::new(libasp::mailbox_dict::MailboxDict::load(p)));
         if let (true, Some((off, len, ptr))) = (
             conf.yaml_config.structured_mailbox,
             conf.yaml_config.input.mailbox_layout(),
@@ -395,12 +400,26 @@ pub fn fuzz() -> Result<(), Error> {
                 DwordInterestingMutator::new(),
                 BytesRandSetMutator::new(),
                 CrossoverReplaceMutator::new(),
-                MailboxFieldMutator::new(off, len, ptr).with_irq(irq),
-                MailboxFieldMutator::new(off, len, ptr).with_irq(irq),
-                MailboxFieldMutator::new(off, len, ptr).with_irq(irq),
-                MailboxFieldMutator::new(off, len, ptr).with_irq(irq),
-                MailboxFieldMutator::new(off, len, ptr).with_irq(irq),
-                MailboxFieldMutator::new(off, len, ptr).with_irq(irq),
+                MailboxFieldMutator::new(off, len, ptr)
+                    .with_irq(irq)
+                    .with_dict(dict.clone()),
+                MailboxFieldMutator::new(off, len, ptr)
+                    .with_irq(irq)
+                    .with_dict(dict.clone()),
+                MailboxFieldMutator::new(off, len, ptr)
+                    .with_irq(irq)
+                    .with_dict(dict.clone()),
+                MailboxFieldMutator::new(off, len, ptr)
+                    .with_irq(irq)
+                    .with_dict(dict.clone()),
+                MailboxFieldMutator::new(off, len, ptr)
+                    .with_irq(irq)
+                    .with_dict(dict.clone()),
+                MailboxFieldMutator::new(off, len, ptr)
+                    .with_irq(irq)
+                    .with_dict(dict.clone()),
+                ArgWindowHavoc::new(off + 4 + if ptr { 8 } else { 0 }, len),
+                ArgWindowHavoc::new(off + 4 + if ptr { 8 } else { 0 }, len),
             ));
             let mut stages = tuple_list!(StdMutationalStage::new(mutator));
             fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;

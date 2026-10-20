@@ -18,6 +18,7 @@ pub mod emulator_module;
 pub use emulator_module::*;
 
 pub mod bindings;
+pub mod mailbox_dict;
 pub mod config;
 pub use bindings::*;
 

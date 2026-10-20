@@ -128,6 +128,9 @@ pub struct YAMLConfig {
     /// waits forever) costs this much wall time each, so lower it for harnesses whose iterations take ms.
     #[serde(default)]
     pub timeout_ms: Option<u64>,
+    /// Mailbox value dictionary (see `amd_sp/tools/gen_mailbox_dict.py`); used by the structured mailbox mutator
+    #[serde(default)]
+    pub mailbox_dict: Option<PathBuf>,
     pub qemu: QemuConf,
     pub flash: FlashConfig,
     pub input: InputConfig,
