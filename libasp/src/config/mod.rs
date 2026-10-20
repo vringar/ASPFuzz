@@ -131,6 +131,9 @@ pub struct YAMLConfig {
     /// Mailbox value dictionary (see `amd_sp/tools/gen_mailbox_dict.py`); used by the structured mailbox mutator
     #[serde(default)]
     pub mailbox_dict: Option<PathBuf>,
+    /// Command ids the mailbox mutators never pick (e.g. [0x40]: waits forever and costs a full timeout)
+    #[serde(default)]
+    pub mailbox_skip_cmds: Vec<u32>,
     /// One input is a SESSION of typed mailbox messages replayed within one snapshot restore (see
     /// `amd_sp/src/structured`); needs `mailbox_catalog` and `input.mailbox_config`. Off by default.
     #[serde(default)]

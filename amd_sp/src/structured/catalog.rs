@@ -25,7 +25,10 @@ pub struct Field {
 impl Field {
     /// byte offset, if the catalog gives a number
     pub fn offset(&self) -> Option<usize> {
-        self.offset.as_ref().and_then(|v| v.as_u64()).map(|v| v as usize)
+        self.offset
+            .as_ref()
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
     }
 
     /// width of a scalar field (u8/u16/u32/u64, tolerating suffixes like "u32?" or "u8 (bits 7:0)")
@@ -44,7 +47,9 @@ impl Field {
             return t.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok();
         }
         let toks: Vec<&str> = t.split_whitespace().collect();
-        toks.windows(2).find(|w| w[1] == "B").and_then(|w| w[0].parse().ok())
+        toks.windows(2)
+            .find(|w| w[1] == "B")
+            .and_then(|w| w[0].parse().ok())
     }
 
     /// (offset, width) for fields the mutators can treat as typed scalars
@@ -70,7 +75,10 @@ pub struct Command {
 impl Command {
     /// (offset, size) of fields the catalog marks as opaque `struct(N B)` blobs
     pub fn opaque(&self) -> Vec<(usize, usize)> {
-        self.arg_layout.iter().filter_map(|f| Some((f.offset()?, f.struct_size()?))).collect()
+        self.arg_layout
+            .iter()
+            .filter_map(|f| Some((f.offset()?, f.struct_size()?)))
+            .collect()
     }
 
     /// Buffer length to allocate: stated arg_size if numeric, else the end of the last field, min header 8.

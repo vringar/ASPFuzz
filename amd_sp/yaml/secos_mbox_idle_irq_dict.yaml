@@ -29,6 +29,7 @@ flash:
 
 debug: true
 timeout_ms: 500
+mailbox_skip_cmds: [0x40]
 mailbox_dict: ../scratch/catalog/dict.json
 structured_mailbox: true
 input:

@@ -109,14 +109,22 @@ pub fn fuzz_session(args: Box<Vec<String>>) -> Result<(), Error> {
         .yaml_config
         .input
         .mailbox_window()
-        .ok_or(Error::illegal_argument("structured_session needs input.mailbox_config"))?;
-    let catalog_path = conf
-        .yaml_config
-        .mailbox_catalog
-        .as_deref()
-        .ok_or(Error::illegal_argument("structured_session needs mailbox_catalog"))?;
+        .ok_or(Error::illegal_argument(
+            "structured_session needs input.mailbox_config",
+        ))?;
+    let catalog_path =
+        conf.yaml_config
+            .mailbox_catalog
+            .as_deref()
+            .ok_or(Error::illegal_argument(
+                "structured_session needs mailbox_catalog",
+            ))?;
     let mut catalog = Catalog::load(catalog_path).map_err(Error::illegal_argument)?;
     catalog.default_ptr = (lo, hi);
+    // commands that never return (SecOS 0x40) only burn the per-session timeout
+    catalog
+        .commands
+        .retain(|c| !conf.yaml_config.mailbox_skip_cmds.contains(&c.id));
     let catalog = Arc::new(catalog);
     let max_len = conf.yaml_config.session_len.unwrap_or(6).max(1);
 
@@ -238,10 +246,17 @@ pub fn fuzz_session(args: Box<Vec<String>>) -> Result<(), Error> {
                     Out::Bp(pc) if sinks.contains(&pc) => {
                         let out = read_mailbox_value(&qemu.cpu_from_index(0).unwrap())
                             .map_or(0, |v| v.mbox);
-                        let status = if out & 0x8000_0000 != 0 { out & 0x7fff_ffff } else { NO_REPLY };
+                        let status = if out & 0x8000_0000 != 0 {
+                            out & 0x7fff_ffff
+                        } else {
+                            NO_REPLY
+                        };
                         stats.lock().unwrap().record(prev, m.cmd, status);
                         if log_mbox {
-                            log::error!("session msg {i} cmd={:#x} in={word:#010x} out={out:#010x}", m.cmd);
+                            log::error!(
+                                "session msg {i} cmd={:#x} in={word:#010x} out={out:#010x}",
+                                m.cmd
+                            );
                         }
                         if status == NO_REPLY {
                             break; // the worker is not back at the doorbell: nothing to deliver to
@@ -268,7 +283,9 @@ pub fn fuzz_session(args: Box<Vec<String>>) -> Result<(), Error> {
                                     break;
                                 }
                                 Out::Bp(pc) => {
-                                    log::error!("session: unexpected exit at PC {pc:#x} after reply");
+                                    log::error!(
+                                        "session: unexpected exit at PC {pc:#x} after reply"
+                                    );
                                     ret = ExitKind::Crash;
                                     break;
                                 }
@@ -313,7 +330,8 @@ pub fn fuzz_session(args: Box<Vec<String>>) -> Result<(), Error> {
         let time_observer = TimeObserver::new("time");
         let time_feedback = TimeFeedback::new(&time_observer);
         let access_observer = AccessObserverObserver::new(conf.yaml_config.crashes.x86.clone());
-        let mut feedback = feedback_or!(MaxMapFeedback::new(&edges_observer), time_feedback.clone());
+        let mut feedback =
+            feedback_or!(MaxMapFeedback::new(&edges_observer), time_feedback.clone());
         let objective_map_feedback =
             MaxMapFeedback::with_name("objective_map_feedback", &edges_observer);
         let mut objective = feedback_or_fast!(
@@ -357,7 +375,12 @@ pub fn fuzz_session(args: Box<Vec<String>>) -> Result<(), Error> {
 
         if state.must_load_initial_inputs() {
             state
-                .load_initial_inputs(&mut fuzzer, &mut executor, &mut mgr, &[input_dir.as_ref().clone()])
+                .load_initial_inputs(
+                    &mut fuzzer,
+                    &mut executor,
+                    &mut mgr,
+                    &[input_dir.as_ref().clone()],
+                )
                 .unwrap_or_else(|_| {
                     log::error!("Failed to load initial corpus at {:?}", &input_dir);
                     process::exit(0);
@@ -365,7 +388,10 @@ pub fn fuzz_session(args: Box<Vec<String>>) -> Result<(), Error> {
             log::info!("We imported {} inputs from disk.", state.corpus().count());
         }
 
-        let mut stages = tuple_list!(StdMutationalStage::new(SessionMutator::new(catalog.clone(), max_len)));
+        let mut stages = tuple_list!(StdMutationalStage::new(SessionMutator::new(
+            catalog.clone(),
+            max_len
+        )));
         fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;
         Ok(())
     };

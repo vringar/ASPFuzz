@@ -384,11 +384,12 @@ pub fn fuzz() -> Result<(), Error> {
 
         // Setup an havoc mutator with a mutational stage
         let irq = conf.yaml_config.input.irq_layout();
-        let dict = conf
-            .yaml_config
-            .mailbox_dict
-            .as_deref()
-            .map(|p| std::sync::Arc::new(libasp::mailbox_dict::MailboxDict::load(p)));
+        let dict = conf.yaml_config.mailbox_dict.as_deref().map(|p| {
+            let mut d = libasp::mailbox_dict::MailboxDict::load(p);
+            d.commands
+                .retain(|c| !conf.yaml_config.mailbox_skip_cmds.contains(&c.id));
+            std::sync::Arc::new(d)
+        });
         if let (true, Some((off, len, ptr))) = (
             conf.yaml_config.structured_mailbox,
             conf.yaml_config.input.mailbox_layout(),

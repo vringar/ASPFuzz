@@ -97,16 +97,46 @@ impl MbMsg {
 }
 
 const POOL: &[u64] = &[
-    0, 1, 2, 3, 4, 8, 0xf, 0x10, 0x20, 0x7f, 0x80, 0xff, 0x100, 0x110, 0x111, 0x1000, 0xffff,
-    0x1_0000, 0x7fff_ffff, 0x8000_0000, 0x8000_0001, 0xffff_fffe, 0xffff_ffff,
-    0x3_f000, 0x4_0000, 0x20_0000, 0x0100_0000, 0x0400_0000, 0xfb00_0000,
-    0x1_0000_0000, 0x7fff_ffff_ffff_ffff, 0x8000_0000_0000_0000, 0xfffd_fb00_0000, u64::MAX,
+    0,
+    1,
+    2,
+    3,
+    4,
+    8,
+    0xf,
+    0x10,
+    0x20,
+    0x7f,
+    0x80,
+    0xff,
+    0x100,
+    0x110,
+    0x111,
+    0x1000,
+    0xffff,
+    0x1_0000,
+    0x7fff_ffff,
+    0x8000_0000,
+    0x8000_0001,
+    0xffff_fffe,
+    0xffff_ffff,
+    0x3_f000,
+    0x4_0000,
+    0x20_0000,
+    0x0100_0000,
+    0x0400_0000,
+    0xfb00_0000,
+    0x1_0000_0000,
+    0x7fff_ffff_ffff_ffff,
+    0x8000_0000_0000_0000,
+    0xfffd_fb00_0000,
+    u64::MAX,
 ];
 
 /// Command ids the Zen2 SecOS handler 0x200b4c dispatches (psp-etl #835/#922); the rest is the default (status 4).
 pub const HANDLED: &[u32] = &[
-    0x2, 0x3, 0x5, 0x6, 0x7, 0x14, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x27, 0x28, 0x29, 0x2a,
-    0x2d, 0x30, 0x39, 0x40, 0x47, 0x50, 0x51, 0x5d,
+    0x2, 0x3, 0x5, 0x6, 0x7, 0x14, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20, 0x21, 0x27, 0x28,
+    0x29, 0x2a, 0x2d, 0x30, 0x39, 0x40, 0x47, 0x50, 0x51, 0x5d,
 ];
 
 /// Known-good command orders (preconditions of the stateful commands, board #922/#925).
@@ -117,7 +147,11 @@ fn below<S: HasRand>(state: &mut S, n: usize) -> usize {
 }
 
 fn mask(width: usize) -> u64 {
-    if width >= 8 { u64::MAX } else { (1u64 << (width * 8)) - 1 }
+    if width >= 8 {
+        u64::MAX
+    } else {
+        (1u64 << (width * 8)) - 1
+    }
 }
 
 fn write_le(buf: &mut [u8], off: usize, width: usize, v: u64) -> bool {
@@ -155,7 +189,13 @@ fn typed_value<S: HasRand>(state: &mut S, width: usize, old: u64) -> u64 {
 /// Typed scalar fields past the 8-byte header (TotalSize/Status are derived / written by the firmware).
 fn scalars(cat: &Catalog, cmd: u32) -> Vec<(usize, usize)> {
     cat.command(cmd)
-        .map(|c| c.arg_layout.iter().filter_map(|f| f.scalar()).filter(|&(o, _)| o >= 8).collect())
+        .map(|c| {
+            c.arg_layout
+                .iter()
+                .filter_map(|f| f.scalar())
+                .filter(|&(o, _)| o >= 8)
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -171,7 +211,13 @@ fn new_msg<S: HasRand>(state: &mut S, cat: &Catalog, cmd: u32) -> MbMsg {
     let len = cat.command(cmd).map_or(16, |c| c.buf_len());
     let mut buf = vec![0u8; len];
     fill_fields(state, cat, cmd, &mut buf);
-    MbMsg { cmd, buf, total_size: LenSpec::Derived, buf_lo: cat.default_ptr.0, buf_hi: cat.default_ptr.1 }
+    MbMsg {
+        cmd,
+        buf,
+        total_size: LenSpec::Derived,
+        buf_lo: cat.default_ptr.0,
+        buf_hi: cat.default_ptr.1,
+    }
 }
 
 /// Benign message: zeroed buffer (all-zero arguments), default pointer, derived TotalSize.
@@ -199,7 +245,9 @@ pub fn initial_sessions(cat: &Catalog) -> Vec<MbSession> {
         .collect();
     for order in VALID_ORDERS {
         if order.iter().all(|&i| cat.command(i).is_some()) {
-            out.push(MbSession::new(order.iter().map(|&i| benign_msg(cat, i)).collect()));
+            out.push(MbSession::new(
+                order.iter().map(|&i| benign_msg(cat, i)).collect(),
+            ));
         }
     }
     out
@@ -236,7 +284,11 @@ impl<S: HasRand> Mutator<MbSession, S> for FieldMutator {
         let old = read_le(&input.parts()[mi].buf, off, w).unwrap_or(0);
         let v = typed_value(state, w, old);
         let ok = write_le(&mut input.parts_mut()[mi].buf, off, w, v);
-        Ok(if ok && v != old { MutationResult::Mutated } else { MutationResult::Skipped })
+        Ok(if ok && v != old {
+            MutationResult::Mutated
+        } else {
+            MutationResult::Skipped
+        })
     }
     fn post_exec(&mut self, _: &mut S, _: Option<CorpusId>) -> Result<(), Error> {
         Ok(())
@@ -399,7 +451,10 @@ impl<S: HasRand> Mutator<MbSession, S> for SequenceMutator {
                 let seq = &self.valid[below(state, self.valid.len())];
                 let take = 1 + below(state, seq.len());
                 let ids: Vec<u32> = seq[..take].to_vec();
-                let parts: Vec<MbMsg> = ids.iter().map(|&i| new_msg(state, &self.catalog, i)).collect();
+                let parts: Vec<MbMsg> = ids
+                    .iter()
+                    .map(|&i| new_msg(state, &self.catalog, i))
+                    .collect();
                 *input = MbSession::new(parts);
             }
             1 if n > 1 => input.remove_part_at_index(below(state, n)),
@@ -448,10 +503,20 @@ impl SessionMutator {
     pub fn new(catalog: Arc<Catalog>, max_len: usize) -> Self {
         let valid = VALID_ORDERS.iter().map(|o| o.to_vec()).collect();
         Self {
-            field: FieldMutator { catalog: catalog.clone() },
-            cmd: CmdMutator { catalog: catalog.clone() },
-            seq: SequenceMutator { catalog: catalog.clone(), valid, max_len },
-            ptr: BufPtrMutator { default_ptr: catalog.default_ptr },
+            field: FieldMutator {
+                catalog: catalog.clone(),
+            },
+            cmd: CmdMutator {
+                catalog: catalog.clone(),
+            },
+            seq: SequenceMutator {
+                catalog: catalog.clone(),
+                valid,
+                max_len,
+            },
+            ptr: BufPtrMutator {
+                default_ptr: catalog.default_ptr,
+            },
             lie: SizeLieMutator,
             opaque: OpaqueMutator { catalog },
         }
@@ -499,7 +564,13 @@ mod tests {
 
     #[test]
     fn render_derives_total_size_unless_overridden() {
-        let mut m = MbMsg { cmd: 2, buf: vec![0; 20], total_size: LenSpec::Derived, buf_lo: 0, buf_hi: 0 };
+        let mut m = MbMsg {
+            cmd: 2,
+            buf: vec![0; 20],
+            total_size: LenSpec::Derived,
+            buf_lo: 0,
+            buf_hi: 0,
+        };
         assert_eq!(&m.render()[0..4], &20u32.to_le_bytes());
         m.total_size = LenSpec::Override(0x8000_0000);
         assert_eq!(&m.render()[0..4], &0x8000_0000u32.to_le_bytes());
@@ -511,10 +582,15 @@ mod tests {
     fn seeds_are_benign_and_skip_hanging_commands() {
         let c = cat();
         let seeds = initial_sessions(&c);
-        let ids: Vec<Vec<u32>> = seeds.iter().map(|s| s.parts().iter().map(|m| m.cmd).collect()).collect();
+        let ids: Vec<Vec<u32>> = seeds
+            .iter()
+            .map(|s| s.parts().iter().map(|m| m.cmd).collect())
+            .collect();
         assert!(ids.contains(&vec![2]));
         assert!(!ids.contains(&vec![6]));
-        assert!(seeds.iter().all(|s| s.parts().iter().all(|m| m.buf.iter().all(|&b| b == 0))));
+        assert!(seeds
+            .iter()
+            .all(|s| s.parts().iter().all(|m| m.buf.iter().all(|&b| b == 0))));
     }
 
     #[test]
@@ -540,7 +616,11 @@ mod tests {
     fn sequences_reach_valid_orders() {
         let c = cat();
         let mut st: NopState<MbSession> = NopState::new();
-        let mut sm = SequenceMutator { catalog: c, valid: vec![vec![27, 6]], max_len: 6 };
+        let mut sm = SequenceMutator {
+            catalog: c,
+            valid: vec![vec![27, 6]],
+            max_len: 6,
+        };
         let mut s = MbSession::new(vec![]);
         let mut saw = false;
         for _ in 0..300 {
@@ -553,7 +633,9 @@ mod tests {
     /// Optional: parse the real (local-only) catalog if MAILBOX_CATALOG points at it.
     #[test]
     fn real_catalog_parses_if_present() {
-        let Ok(p) = std::env::var("MAILBOX_CATALOG") else { return };
+        let Ok(p) = std::env::var("MAILBOX_CATALOG") else {
+            return;
+        };
         let c = Catalog::from_json(&std::fs::read_to_string(p).unwrap()).unwrap();
         assert!(c.commands.len() > 10);
         assert!(initial_sessions(&c).len() > 10);

@@ -289,7 +289,7 @@ checksum = "78e2ceaf91e22593e194211930aea78a41af58e49e872474ebf4335bf649aad1"
 [[package]]
 name = "build_id2"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "ahash",
  "rustversion",
@@ -545,7 +545,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 [[package]]
 name = "core_affinity2"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "libafl_core",
  "libc",
@@ -817,7 +817,7 @@ dependencies = [
 [[package]]
 name = "exceptional"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "libafl_core",
  "libc",
@@ -838,7 +838,7 @@ checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
 [[package]]
 name = "fast_rands"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "rand_core",
  "rustversion",
@@ -1214,7 +1214,7 @@ checksum = "a4933f3f57a8e9d9da04db23fb153356ecaf00cbd14aee46279c33dc80925c37"
 [[package]]
 name = "libafl"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "ahash",
  "arbitrary-int",
@@ -1255,7 +1255,7 @@ dependencies = [
 [[package]]
 name = "libafl_asan_layout"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "build-target",
  "libc",
@@ -1266,7 +1266,7 @@ dependencies = [
 [[package]]
 name = "libafl_bolts"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "ahash",
  "backtrace",
@@ -1309,7 +1309,7 @@ dependencies = [
 [[package]]
 name = "libafl_core"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "backtrace",
  "nix 0.31.3",
@@ -1323,7 +1323,7 @@ dependencies = [
 [[package]]
 name = "libafl_derive"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1333,7 +1333,7 @@ dependencies = [
 [[package]]
 name = "libafl_qemu"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "addr2line 0.27.1",
  "capstone",
@@ -1370,7 +1370,7 @@ dependencies = [
 [[package]]
 name = "libafl_qemu_build"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "bindgen",
  "cc",
@@ -1384,7 +1384,7 @@ dependencies = [
 [[package]]
 name = "libafl_qemu_sys"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "libafl_qemu_build",
  "libc",
@@ -1398,7 +1398,7 @@ dependencies = [
 [[package]]
 name = "libafl_targets"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "bindgen",
  "cc",
@@ -1468,7 +1468,7 @@ dependencies = [
 [[package]]
 name = "libvharness_sys"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "bindgen",
  "cmake",
@@ -1501,7 +1501,7 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 [[package]]
 name = "ll_mp"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "exceptional",
  "hostname",
@@ -1576,7 +1576,7 @@ dependencies = [
 [[package]]
 name = "minibsod"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "exceptional",
  "libc",
@@ -1638,7 +1638,7 @@ dependencies = [
 [[package]]
 name = "no_std_time"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "rustversion",
 ]
@@ -1656,7 +1656,7 @@ dependencies = [
 [[package]]
 name = "nonzero_macros"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 
 [[package]]
 name = "nu-ansi-term"
@@ -1764,7 +1764,7 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 [[package]]
 name = "ownedref"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "libafl_core",
  "rustversion",
@@ -2105,7 +2105,7 @@ dependencies = [
 [[package]]
 name = "serde_anymap"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "ctor",
  "erased-serde",
@@ -2227,7 +2227,7 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 [[package]]
 name = "shmem_providers"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "fast_rands",
  "hashbrown",
@@ -2478,7 +2478,7 @@ checksum = "141fb9f71ee586d956d7d6e4d5a9ef8e946061188520140f7591b668841d502e"
 [[package]]
 name = "tuple_list_ex"
 version = "0.16.1"
-source = "git+https://github.com/PSPReverse/LibAFL?rev=3c06fb5adf47a1be006e96c5715653f6046671b8#3c06fb5adf47a1be006e96c5715653f6046671b8"
+source = "git+https://github.com/PSPReverse/LibAFL?rev=9f154e3470fd6bd12c0da487ec9b33866d9f4dda#9f154e3470fd6bd12c0da487ec9b33866d9f4dda"
 dependencies = [
  "libafl_core",
  "ownedref",

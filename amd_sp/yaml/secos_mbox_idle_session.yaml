@@ -17,6 +17,7 @@ flash:
 
 debug: true
 timeout_ms: 500
+mailbox_skip_cmds: [0x40]
 structured_session: true
 mailbox_catalog: ../scratch/catalog/v3.json
 session_len: 6
