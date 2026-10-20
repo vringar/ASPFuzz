@@ -124,6 +124,10 @@ pub struct YAMLConfig {
     /// Add field-aware mailbox mutators (command id, framing, argument dwords); needs `input.mailbox_config`
     #[serde(default)]
     pub structured_mailbox: bool,
+    /// Comparison-feedback guided mutation (CmpLog + input-to-state replacement) for the
+    /// `structured_mailbox` flat-bytes path. Off by default.
+    #[serde(default)]
+    pub cmplog: bool,
     /// Per-iteration timeout in milliseconds (default 10000). A hung iteration (e.g. SecOS command 0x40
     /// waits forever) costs this much wall time each, so lower it for harnesses whose iterations take ms.
     #[serde(default)]

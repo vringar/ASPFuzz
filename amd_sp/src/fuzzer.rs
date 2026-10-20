@@ -3,6 +3,10 @@
 use core::{ptr::addr_of_mut, time::Duration};
 use std::process;
 
+use crate::cmplog::{
+    AspCmpLogModule, CmdGuard, CmpBoundaryMutator, CmpTraceStage, GatedCmpLogObserver,
+    SignFlipMutator,
+};
 use crate::mailbox_mutator::{ArgWindowHavoc, MailboxFieldMutator};
 use crate::setup::{parse_args, setup_directory_structure};
 use libafl::{
@@ -24,6 +28,7 @@ use libafl::{
             WordInterestingMutator,
         },
         scheduled::HavocScheduledMutator,
+        token_mutations::I2SRandReplace,
     },
     observers::{CanTrack, HitcountsMapObserver, TimeObserver, VariableMapObserver},
     schedulers::{IndexesLenTimeMinimizerScheduler, QueueScheduler},
@@ -146,7 +151,12 @@ pub fn fuzz() -> Result<(), Error> {
                     .map_observer(edges_observer.as_mut())
                     .build()?,
             )
-            .prepend(dr_cov_module);
+            .prepend(dr_cov_module)
+            .prepend(AspCmpLogModule::new(
+                conf.yaml_config.cmplog,
+                // SecOS app and driver image (kernel 0x0-0x10000 left out)
+                vec![0x20_0000..0x21_0000, 0xe0_0000..0xf0_0000],
+            ));
         let args = args.as_ref();
         let emulator = Emulator::empty()
             .qemu_parameters(QemuParams::Cli(args.clone()))
@@ -352,11 +362,20 @@ pub fn fuzz() -> Result<(), Error> {
         let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
         let timeout = Duration::from_millis(conf.yaml_config.timeout_ms.unwrap_or(10_000));
 
+        // SAFETY: the global cmplog map never moves
+        let cmplog_observer = unsafe {
+            GatedCmpLogObserver::new(conf.yaml_config.cmplog, libafl_targets::CMPLOG_MAP_PTR)
+        };
         // Create a QEMU in-process executor
         let mut executor = QemuExecutor::new(
             emulator,
             &mut harness,
-            tuple_list!(edges_observer, time_observer, access_observer),
+            tuple_list!(
+                edges_observer,
+                time_observer,
+                access_observer,
+                cmplog_observer
+            ),
             &mut fuzzer,
             &mut state,
             &mut mgr,
@@ -425,6 +444,46 @@ pub fn fuzz() -> Result<(), Error> {
                 ArgWindowHavoc::new(off + 4 + if ptr { 8 } else { 0 }, len),
                 ArgWindowHavoc::new(off + 4 + if ptr { 8 } else { 0 }, len),
             ));
+            if conf.yaml_config.cmplog {
+                // same mutators plus compare-guided ones (CmpValuesMetadata comes from CmpTraceStage)
+                let skip = conf.yaml_config.mailbox_skip_cmds.clone();
+                let cmp_mutator = HavocScheduledMutator::new(tuple_list!(
+                    BitFlipMutator::new(),
+                    ByteFlipMutator::new(),
+                    ByteRandMutator::new(),
+                    ByteInterestingMutator::new(),
+                    WordInterestingMutator::new(),
+                    DwordInterestingMutator::new(),
+                    BytesRandSetMutator::new(),
+                    CrossoverReplaceMutator::new(),
+                    MailboxFieldMutator::new(off, len, ptr)
+                        .with_irq(irq)
+                        .with_dict(dict.clone()),
+                    MailboxFieldMutator::new(off, len, ptr)
+                        .with_irq(irq)
+                        .with_dict(dict.clone()),
+                    MailboxFieldMutator::new(off, len, ptr)
+                        .with_irq(irq)
+                        .with_dict(dict.clone()),
+                    MailboxFieldMutator::new(off, len, ptr)
+                        .with_irq(irq)
+                        .with_dict(dict.clone()),
+                    ArgWindowHavoc::new(off + 4 + if ptr { 8 } else { 0 }, len),
+                    CmdGuard::new(I2SRandReplace, off, skip.clone()),
+                    CmdGuard::new(I2SRandReplace, off, skip.clone()),
+                    CmdGuard::new(I2SRandReplace, off, skip.clone()),
+                    CmdGuard::new(CmpBoundaryMutator::new(off, ptr, len), off, skip.clone()),
+                    CmdGuard::new(CmpBoundaryMutator::new(off, ptr, len), off, skip.clone()),
+                    CmdGuard::new(CmpBoundaryMutator::new(off, ptr, len), off, skip),
+                    SignFlipMutator::new(off, ptr, len),
+                ));
+                let mut stages = tuple_list!(
+                    CmpTraceStage::new(),
+                    StdMutationalStage::new(cmp_mutator)
+                );
+                fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;
+                return Ok(());
+            }
             let mut stages = tuple_list!(StdMutationalStage::new(mutator));
             fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;
         } else if conf.yaml_config.fixed_length_mutators {
