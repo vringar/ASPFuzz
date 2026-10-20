@@ -64,7 +64,7 @@ const POOL: &[u32] = &[
 pub struct MailboxFieldMutator {
     /// byte offset of the command word inside the input
     offset: usize,
-    /// size of the argument buffer following the word (and the pointers, if present)
+    /// size of the argument buffer (excludes the pointer words, which sit between the word and the buffer)
     len: usize,
     /// input carries CmdRspBufAddr lo/hi right behind the word
     ptr_fields: bool,

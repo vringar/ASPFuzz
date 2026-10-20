@@ -43,7 +43,8 @@ impl FlashConfig {
     fn apply_input(&self, mut buffer: &[u8]) {
         for input_location in &self.input {
             unsafe {
-                write_flash_mem(input_location.addr, &buffer[..input_location.size]);
+                write_flash_mem(input_location.addr, &buffer[..input_location.size])
+                    .expect("Failed to write flash input");
             }
             buffer = &buffer[input_location.size..];
         }
@@ -52,7 +53,7 @@ impl FlashConfig {
         for &FixedLocation { addr, val } in &self.fixed {
             let buffer = val.to_ne_bytes();
             unsafe {
-                write_flash_mem(addr, &buffer);
+                write_flash_mem(addr, &buffer).expect("Failed to write flash input");
             }
         }
     }

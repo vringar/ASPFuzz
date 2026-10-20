@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 // These need to be kept in sync with the functions in the emulator repository
 extern "C" {
-    fn aspfuzz_write_smn_flash(addr: hwaddr, len: hwaddr, buf: *const u8);
+    fn aspfuzz_write_smn_flash(addr: hwaddr, len: hwaddr, buf: *const u8) -> i32;
     fn aspfuzz_x86_write(addr: hwaddr, buf: *mut u8, len: hwaddr) -> i32;
     fn aspfuzz_x86_read(addr: hwaddr, buf: *mut u8, len: hwaddr) -> i32;
     fn aspfuzz_access_observer_activate(addr: hwaddr, size: hwaddr) -> i32;
@@ -25,8 +25,13 @@ extern "C" {
 /// # Safety
 /// This function should only be called if QEMU has been fully initialized
 /// and the flash memory is accessible
-pub unsafe fn write_flash_mem(addr: GuestAddr, buf: &[u8]) {
-    aspfuzz_write_smn_flash(addr as hwaddr, buf.len().try_into().unwrap(), buf.as_ptr());
+pub unsafe fn write_flash_mem(addr: GuestAddr, buf: &[u8]) -> Result<(), Error> {
+    let len = hwaddr::try_from(buf.len()).map_err(|_| Error::illegal_state("flash write too long"))?;
+    if aspfuzz_write_smn_flash(addr as hwaddr, len, buf.as_ptr()) == 0 {
+        Ok(())
+    } else {
+        Err(Error::illegal_state("flash write out of range"))
+    }
 }
 
 /// Raise interrupt `id` (group*32+bit) on the PSP interrupt controller; call only while the vCPU is stopped.
