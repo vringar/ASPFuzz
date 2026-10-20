@@ -45,7 +45,15 @@ start_aspfuzz() {
 # kill the process group of the run by PID (never by name)
 stop_aspfuzz() {
   [ -n "${PGID:-}" ] || return 0
+  # the launcher may start children in their own session: collect all descendants by PID before killing
+  local pids="$PGID" new="$PGID" kids
+  while [ -n "$new" ]; do
+    kids=$(for p in $new; do pgrep -P "$p"; done | tr '\n' ' ')
+    pids="$pids $kids"; new="$kids"
+  done
   kill -KILL -- "-$PGID" 2>/dev/null
+  # shellcheck disable=SC2086
+  kill -KILL $pids 2>/dev/null
   for _ in $(seq 150); do pgrep -x aspfuzz >/dev/null || break; sleep 0.2; done
   PGID=""
 }
