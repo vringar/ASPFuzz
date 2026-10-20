@@ -62,6 +62,7 @@ use libasp::{
         get_run_conf,
     },
     read_mailbox_value, CustomMetadataFeedback, ExceptionFeedback, MiscMetadata, RegisterMetadata,
+    ReplyNoveltyFeedback,
 };
 use rangemap::RangeMap;
 
@@ -359,7 +360,9 @@ pub fn fuzz() -> Result<(), Error> {
             // New maximization map feedback linked to the edges observer and the feedback state
             MaxMapFeedback::new(&edges_observer),
             // Time feedback, this one does not need a feedback state
-            time_feedback.clone()
+            time_feedback.clone(),
+            // new (command, reply status) pair; inert unless `reply_feedback: true`
+            ReplyNoveltyFeedback::new(conf.yaml_config.reply_feedback)
         );
         let objective_map_feedback =
             MaxMapFeedback::with_name("objective_map_feedback", &edges_observer);

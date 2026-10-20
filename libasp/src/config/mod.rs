@@ -138,6 +138,9 @@ pub struct YAMLConfig {
     /// Command ids the mailbox mutators never pick (e.g. [0x40]: waits forever and costs a full timeout)
     #[serde(default)]
     pub mailbox_skip_cmds: Vec<u32>,
+    /// Keep inputs that produce a mailbox reply word (command + status) not seen before, even without new edges
+    #[serde(default)]
+    pub reply_feedback: bool,
     /// Before the snapshot: `warmup_ticks` times advance the guest timer by `warmup_advance_ms`, inject IRQ
     /// `warmup_irq` and let the guest return to the harness start PC (idle-WFI start; needs counter_hz on the timer)
     #[serde(default)]

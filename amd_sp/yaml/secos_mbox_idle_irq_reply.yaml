@@ -1,0 +1,121 @@
+# SecOS mailbox harness, snapshot at the first idle WFI (0x1db2) so that the driver threads
+# (ids 0x1d/0x3a/0x70-0x74) have attached; no PermaJump over the doorbell wait, the mailbox word is
+# delivered via the 0x3c doorbell (see stuck-ids report, board emu).
+#
+# The snapshot is taken at 0x20298a, the first PC after the app init
+# (attach routines at 0x202ddc/0x201e44/0x201f28 and the thread creations),
+# so IRQ ids 0x10/0x31/0x34/0x3c are already attached and the worker threads
+# exist when the mailbox input is injected (see psp-etl #664). Starting
+# earlier (0x201e10, the main loop) snapshots before the attaches.
+# The iteration ends when the mailbox function returns (0x200e70) or at the
+# first idle WFI (0x1db2), which is only reached after the function ran.
+#
+# Needs a QEMU with the IC/timer/mailbox models (qemu-psp >= 217e2ce5).
+# No extra QEMU args are needed: the timer tick prop
+# (-global driver=amd_psp.timer,property=expiry_irq_id,value=96) is not
+# required, and without the WFI sink it made iterations time out in the idle
+# loop (PC 0x1db4).
+qemu:
+  # Zen generation to emulate
+  zen: "Zen2"
+  # On-chip bootloader to use
+  on_chip_bl_path: "bins/on-chip-bl-Ryzen-Zen2-Desktop"
+# Flash informations
+flash:
+  # Size of flash memory
+  size: 0x1000000
+  # Base image in flash memory
+  base: "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
+
+debug: true
+timeout_ms: 500
+reply_feedback: true
+mailbox_skip_cmds: [0x40]
+mailbox_dict: ../scratch/catalog/dict.json
+structured_mailbox: true
+input:
+  flash:
+    # nothing
+  x86:
+    # nothing
+  psp:
+    # nothing
+  mailbox: true
+  mailbox_config:
+    mbox_high: 0x0
+    mbox_low: 0x00000000
+    size: 272
+    fuzz_pointers: true
+  irq:
+    ids: [0x1d, 0x3a, 0x70, 0x71, 0x72, 0x73, 0x74]
+    slots: 2
+  initial_inputs:
+    # word0 = cmd << 16 (bit 31 clear = pending), then 272 zero bytes
+    - sample_inputs_mbox_irq
+
+harness:
+  # first PC after the app init (all IRQs attached, threads created)
+  start: 0x1db2
+  sinks:
+    - 0x00200e70 # end of the mailbox function
+    - 0x002016ee
+    - 0x0020172e
+    - 0x00000ef6 # faulty instruction
+
+
+# Tunnels describe any fixup that has to happen during execution
+# at a certain address
+# Jumps are very finicky
+# Jump to early and the TB will crash
+# Jump to late and there will be Data Aborts
+# The positions can change when upgrading QEMU
+tunnels:
+  # fix function in x86_workloop
+  - addr: 0x9236
+    action: SetConstant
+    target: R0
+    value: 0x0
+  # overwrite of 0x100ac
+  - addr: 0x6988
+    action: SetConstant
+    target: R0
+    value: 0x1
+  # SKIP ABL
+  - addr: 0x2938   # When the overwriting happens
+    action: Jump
+    source: 0x2a1c # what gets overwritten
+    target: 0x2a2a # where to jump to
+
+# set fuse to actually write service page
+  - addr: 0xd29a
+    action: SetConstant
+    target: R0
+    value: 0x7
+
+  # set mmapfunc return to 0 instead of 0x34
+  - addr: 0x202a50
+    action: SetConstant
+    target: R0
+    value: 0x0
+
+
+#TODO: fix that if breakpoint is within code executed before harness, fuzzer will break
+crashes:
+  breakpoints:
+    # - 0x201b46
+  mmap:
+    no_exec:
+    ccp_memcopy_addr: 0x0
+    forbidden_memcopies:
+    forbidden_writes:
+      - begin: 0x200000
+        end: 0x203660
+    x86:
+      start: 0xfffd00000000
+      end: 0xffffffffffff
+
+snapshot:
+  default: "SuperLazy"
+  on_crash: "HardReset"
+  periodically: "RustSnapshot"
+  period: 100000

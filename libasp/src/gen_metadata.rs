@@ -128,3 +128,52 @@ impl Named for CustomMetadataFeedback {
         &Cow::Borrowed("CustomMetadataFeedback")
     }
 }
+
+/// Treats an input as interesting when the mailbox reply word (command bits + status, bit 31 = replied) was
+/// not seen before. Edge coverage cannot see "same handler path, new status" (libafl review #1061).
+/// Disabled instances never report anything.
+#[derive(Clone, Debug, Default)]
+pub struct ReplyNoveltyFeedback {
+    enabled: bool,
+    seen: std::collections::HashSet<u32>,
+}
+
+impl ReplyNoveltyFeedback {
+    #[must_use]
+    pub fn new(enabled: bool) -> Self {
+        Self {
+            enabled,
+            seen: std::collections::HashSet::new(),
+        }
+    }
+}
+
+impl<S> StateInitializer<S> for ReplyNoveltyFeedback {}
+impl<EM, I, OT, S> Feedback<EM, I, OT, S> for ReplyNoveltyFeedback
+where
+    S: HasMetadata,
+{
+    fn is_interesting(
+        &mut self,
+        state: &mut S,
+        _manager: &mut EM,
+        _input: &I,
+        _observers: &OT,
+        _exit_kind: &ExitKind,
+    ) -> Result<bool, Error> {
+        if !self.enabled {
+            return Ok(false);
+        }
+        let Ok(misc) = state.metadata::<MiscMetadata>() else {
+            return Ok(false);
+        };
+        Ok(self.seen.insert(misc.mailbox_values.mbox & 0x80ff_ffff))
+    }
+}
+
+impl Named for ReplyNoveltyFeedback {
+    #[inline]
+    fn name(&self) -> &Cow<'static, str> {
+        &Cow::Borrowed("ReplyNoveltyFeedback")
+    }
+}
