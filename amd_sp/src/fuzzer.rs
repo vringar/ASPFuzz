@@ -158,7 +158,7 @@ pub fn fuzz() -> Result<(), Error> {
                 vec![0x20_0000..0x21_0000, 0xe0_0000..0xf0_0000],
             ));
         let args = args.as_ref();
-        let emulator = Emulator::empty()
+        let mut emulator = Emulator::empty()
             .qemu_parameters(QemuParams::Cli(args.clone()))
             .modules(emulator_modules)
             .build()?;
@@ -178,6 +178,49 @@ pub fn fuzz() -> Result<(), Error> {
             }
         }
         qemu.remove_breakpoint(start_addr);
+        if conf.yaml_config.warmup_ticks > 0 {
+            // record the warmup blocks in the drcov log too (the filter denies everything until the harness runs)
+            emulator
+                .modules_mut()
+                .get_mut::<DrCovModule<StdAddressFilter>>()
+                .unwrap()
+                .update_address_filter(qemu, StdAddressFilter::allow_list(vec![]));
+        }
+        if std::env::var_os("ASPFUZZ_EXIT_BEFORE_WARMUP").is_some() {
+            std::process::exit(0); // trace baseline: everything up to the first idle park
+        }
+        for i in 0..conf.yaml_config.warmup_ticks {
+            let r = libasp::advance_timer(conf.yaml_config.warmup_advance_ms * 1_000_000)
+                .and_then(|()| libasp::inject_irq(conf.yaml_config.warmup_irq));
+            if let Err(e) = r {
+                log::error!("warmup {i}: {e:?}");
+                break;
+            }
+            // a breakpoint on the current PC fires at once, so first wait for the WFI to wake (wake_pc),
+            // then for the guest to park again at the start PC
+            let wake_pc = conf.yaml_config.warmup_wake_pc;
+            let mut ok = true;
+            for target in [wake_pc, start_addr] {
+                qemu.set_breakpoint(target);
+                let res = unsafe { qemu.run() };
+                qemu.remove_breakpoint(target);
+                match res {
+                    Ok(QemuExitReason::Breakpoint(a)) if a == target => {}
+                    other => {
+                        log::error!("warmup {i}: unexpected exit at {target:#x}: {other:?}");
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            if !ok {
+                break;
+            }
+            log::error!("warmup {i}: advance+inject+parked");
+        }
+        if std::env::var_os("ASPFUZZ_EXIT_AFTER_WARMUP").is_some() {
+            std::process::exit(0); // trace window: warmup cycles only
+        }
         for &s in &conf.yaml_config.harness.sinks {
             qemu.set_breakpoint(s); // BREAKPOINT
         }
@@ -477,10 +520,8 @@ pub fn fuzz() -> Result<(), Error> {
                     CmdGuard::new(CmpBoundaryMutator::new(off, ptr, len), off, skip),
                     SignFlipMutator::new(off, ptr, len),
                 ));
-                let mut stages = tuple_list!(
-                    CmpTraceStage::new(),
-                    StdMutationalStage::new(cmp_mutator)
-                );
+                let mut stages =
+                    tuple_list!(CmpTraceStage::new(), StdMutationalStage::new(cmp_mutator));
                 fuzzer.fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)?;
                 return Ok(());
             }

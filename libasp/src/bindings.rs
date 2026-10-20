@@ -18,6 +18,7 @@ extern "C" {
     fn aspfuzz_access_observer_activate(addr: hwaddr, size: hwaddr) -> i32;
     fn aspfuzz_access_observer_reset() -> i32;
     fn aspfuzz_irq_inject(id: u32) -> i32;
+    fn aspfuzz_timer_advance(ns: u64) -> i32;
     /// This is a little tricky to use because we will always just write back
     /// the value in our current struct, so we need to treat 0 as a special case
     fn aspfuzz_access_observer_status(get_read: bool, addr: *mut hwaddr, pc: *mut vaddr) -> i32;
@@ -41,6 +42,17 @@ pub fn inject_irq(id: u32) -> Result<(), Error> {
         Ok(())
     } else {
         Err(Error::illegal_state("IC not realized or irq id out of range"))
+    }
+}
+
+/// Advance the guest's virtual timer counter by `ns` (needs `-global driver=amd_psp.timer,property=counter_hz,value=100000000`);
+/// call only while the vCPU is stopped.
+pub fn advance_timer(ns: u64) -> Result<(), Error> {
+    // SAFETY: plain by-value call; the C side returns -1 if the timer is not realized
+    if unsafe { aspfuzz_timer_advance(ns) } == 0 {
+        Ok(())
+    } else {
+        Err(Error::illegal_state("timer not realized"))
     }
 }
 

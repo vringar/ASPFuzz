@@ -51,10 +51,7 @@ pub struct AspCmpLogModule {
 impl AspCmpLogModule {
     #[must_use]
     pub fn new(enabled: bool, ranges: Vec<std::ops::Range<GuestAddr>>) -> Self {
-        Self {
-            ranges,
-            enabled,
-        }
+        Self { ranges, enabled }
     }
 
     fn must_instrument(&self, pc: GuestAddr) -> bool {

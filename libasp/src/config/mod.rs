@@ -138,6 +138,17 @@ pub struct YAMLConfig {
     /// Command ids the mailbox mutators never pick (e.g. [0x40]: waits forever and costs a full timeout)
     #[serde(default)]
     pub mailbox_skip_cmds: Vec<u32>,
+    /// Before the snapshot: `warmup_ticks` times advance the guest timer by `warmup_advance_ms`, inject IRQ
+    /// `warmup_irq` and let the guest return to the harness start PC (idle-WFI start; needs counter_hz on the timer)
+    #[serde(default)]
+    pub warmup_ticks: u32,
+    #[serde(default)]
+    pub warmup_irq: u32,
+    #[serde(default)]
+    pub warmup_advance_ms: u64,
+    /// PC reached when the idle WFI wakes (the instruction after it)
+    #[serde(default)]
+    pub warmup_wake_pc: GuestAddr,
     /// One input is a SESSION of typed mailbox messages replayed within one snapshot restore (see
     /// `amd_sp/src/structured`); needs `mailbox_catalog` and `input.mailbox_config`. Off by default.
     #[serde(default)]
