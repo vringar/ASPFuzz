@@ -238,7 +238,7 @@ pub fn fuzz_session(args: Box<Vec<String>>) -> Result<(), Error> {
             let mut parked = false;
             let n = input.parts().len().min(max_len);
             for (i, m) in input.parts().iter().take(max_len).enumerate() {
-                let word = (m.cmd << 16) & 0x7fff_ffff;
+                let word = ((m.cmd << 16) | (u32::from(m.flags & 0x7f) << 24)) & 0x7fff_ffff;
                 conf.yaml_config
                     .input
                     .apply_mailbox_message(word, m.buf_lo, m.buf_hi, &m.render());

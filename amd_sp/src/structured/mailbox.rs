@@ -47,6 +47,10 @@ pub struct MbMsg {
     pub total_size: LenSpec,
     pub buf_lo: u32,
     pub buf_hi: u32,
+    /// framing bits 30:24 of the command word (recovery / reset-required, AMD 55758 p.76-77); bit 31 stays
+    /// clear because a set Ready bit is never picked up by the worker
+    #[serde(default)]
+    pub flags: u8,
 }
 impl Input for MbMsg {}
 
@@ -217,6 +221,7 @@ fn new_msg<S: HasRand>(state: &mut S, cat: &Catalog, cmd: u32) -> MbMsg {
         total_size: LenSpec::Derived,
         buf_lo: cat.default_ptr.0,
         buf_hi: cat.default_ptr.1,
+        flags: 0,
     }
 }
 
@@ -229,6 +234,7 @@ pub fn benign_msg(cat: &Catalog, cmd: u32) -> MbMsg {
         total_size: LenSpec::Derived,
         buf_lo: cat.default_ptr.0,
         buf_hi: cat.default_ptr.1,
+        flags: 0,
     }
 }
 
@@ -343,6 +349,11 @@ impl<S: HasRand> Mutator<MbSession, S> for SizeLieMutator {
             return Ok(MutationResult::Skipped);
         }
         let mi = below(state, n);
+        if below(state, 4) == 0 {
+            // framing knob: flip one of the command-word bits 30:24
+            input.parts_mut()[mi].flags ^= 1 << below(state, 7);
+            return Ok(MutationResult::Mutated);
+        }
         input.parts_mut()[mi].total_size = match below(state, 3) {
             0 => LenSpec::Override(POOL[below(state, POOL.len())] as u32),
             1 => LenSpec::Delta(below(state, 17) as i32 - 8),
@@ -570,6 +581,7 @@ mod tests {
             total_size: LenSpec::Derived,
             buf_lo: 0,
             buf_hi: 0,
+            flags: 0,
         };
         assert_eq!(&m.render()[0..4], &20u32.to_le_bytes());
         m.total_size = LenSpec::Override(0x8000_0000);
