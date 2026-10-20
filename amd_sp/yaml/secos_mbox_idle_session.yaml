@@ -1,0 +1,102 @@
+# SecOS mailbox harness, SESSION mode (structured_session): one input is a list of typed mailbox
+# messages replayed within one snapshot restore. Snapshot at the first idle WFI (0x1db2), as in
+# secos_mbox_idle_irq*.yaml. After a message's reply sink (0x200e70) the guest is run on to the idle
+# WFI, where the mailbox worker waits for the next doorbell. timeout_ms is the budget of a whole session.
+# Needs the (local-only, AMD-derived, never committed) catalog JSON at mailbox_catalog.
+qemu:
+  # Zen generation to emulate
+  zen: "Zen2"
+  # On-chip bootloader to use
+  on_chip_bl_path: "bins/on-chip-bl-Ryzen-Zen2-Desktop"
+# Flash informations
+flash:
+  # Size of flash memory
+  size: 0x1000000
+  # Base image in flash memory
+  base: "bins/PRIME-B450M-K-II-ASUS-4403.BIN.2nd_half"
+
+debug: true
+timeout_ms: 500
+structured_session: true
+mailbox_catalog: ../scratch/catalog/v3.json
+session_len: 6
+input:
+  flash:
+    # nothing
+  x86:
+    # nothing
+  psp:
+    # nothing
+  mailbox: true
+  mailbox_config:
+    mbox_high: 0x0
+    mbox_low: 0x00000000
+    size: 272
+    fuzz_pointers: true
+
+harness:
+  # first PC after the app init (all IRQs attached, threads created)
+  start: 0x1db2
+  sinks:
+    - 0x00200e70 # end of the mailbox function
+    - 0x002016ee
+    - 0x0020172e
+    - 0x00000ef6 # faulty instruction
+
+
+# Tunnels describe any fixup that has to happen during execution
+# at a certain address
+# Jumps are very finicky
+# Jump to early and the TB will crash
+# Jump to late and there will be Data Aborts
+# The positions can change when upgrading QEMU
+tunnels:
+  # fix function in x86_workloop
+  - addr: 0x9236
+    action: SetConstant
+    target: R0
+    value: 0x0
+  # overwrite of 0x100ac
+  - addr: 0x6988
+    action: SetConstant
+    target: R0
+    value: 0x1
+  # SKIP ABL
+  - addr: 0x2938   # When the overwriting happens
+    action: Jump
+    source: 0x2a1c # what gets overwritten
+    target: 0x2a2a # where to jump to
+
+# set fuse to actually write service page
+  - addr: 0xd29a
+    action: SetConstant
+    target: R0
+    value: 0x7
+
+  # set mmapfunc return to 0 instead of 0x34
+  - addr: 0x202a50
+    action: SetConstant
+    target: R0
+    value: 0x0
+
+
+#TODO: fix that if breakpoint is within code executed before harness, fuzzer will break
+crashes:
+  breakpoints:
+    # - 0x201b46
+  mmap:
+    no_exec:
+    ccp_memcopy_addr: 0x0
+    forbidden_memcopies:
+    forbidden_writes:
+      - begin: 0x200000
+        end: 0x203660
+    x86:
+      start: 0xfffd00000000
+      end: 0xffffffffffff
+
+snapshot:
+  default: "SuperLazy"
+  on_crash: "HardReset"
+  periodically: "RustSnapshot"
+  period: 100000

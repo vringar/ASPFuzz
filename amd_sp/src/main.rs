@@ -3,6 +3,7 @@
 mod fuzzer;
 mod mailbox_mutator;
 mod setup;
+mod structured;
 
 use libafl::Error;
 

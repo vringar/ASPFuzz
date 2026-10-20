@@ -93,6 +93,9 @@ pub fn fuzz() -> Result<(), Error> {
 
     let args = Box::new(parse_args());
     let conf = get_run_conf().ok_or(Error::empty_optional("No run configuration found"))?;
+    if conf.yaml_config.structured_session {
+        return crate::structured::session::fuzz_session(args);
+    }
 
     let (input_dir, log_dir, solutions_dir) =
         setup_directory_structure(&conf.run_dir, &conf.config_path)?;

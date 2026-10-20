@@ -131,6 +131,16 @@ pub struct YAMLConfig {
     /// Mailbox value dictionary (see `amd_sp/tools/gen_mailbox_dict.py`); used by the structured mailbox mutator
     #[serde(default)]
     pub mailbox_dict: Option<PathBuf>,
+    /// One input is a SESSION of typed mailbox messages replayed within one snapshot restore (see
+    /// `amd_sp/src/structured`); needs `mailbox_catalog` and `input.mailbox_config`. Off by default.
+    #[serde(default)]
+    pub structured_session: bool,
+    /// Protocol catalog JSON (local-only, never committed) driving the session mutators
+    #[serde(default)]
+    pub mailbox_catalog: Option<PathBuf>,
+    /// Maximum messages per session (default 6); the per-session time budget is `timeout_ms`
+    #[serde(default)]
+    pub session_len: Option<usize>,
     pub qemu: QemuConf,
     pub flash: FlashConfig,
     pub input: InputConfig,

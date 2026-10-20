@@ -368,6 +368,32 @@ impl InputConfig {
         }
     }
 
+    /// (default CmdRspBufAddr lo, hi, buffer window size) of the mailbox, for session inputs
+    #[must_use]
+    pub fn mailbox_window(&self) -> Option<(u32, u32, usize)> {
+        let c = self.mailbox_config.as_ref()?;
+        Some((c.mbox_low, c.mbox_high, c.size))
+    }
+
+    /// Deliver one mailbox message: the buffer goes to the x86 address `lo | (hi & 0xffff) << 32`
+    /// (padded with zeros to the configured window, so no stale bytes of an earlier message survive),
+    /// then the mailbox words are written. An unmapped buffer address is logged, not fatal: the guest
+    /// still gets the pointer.
+    pub fn apply_mailbox_message(&self, word: u32, lo: u32, hi: u32, buf: &[u8]) {
+        let qemu = Qemu::get().unwrap();
+        let cpu = &qemu.cpu_from_index(0).expect("We always have one CPU");
+        let hi = hi & 0x0000_ffff;
+        let mut window = buf.to_vec();
+        window.resize(window.len().max(self.mailbox_config.as_ref().map_or(0, |c| c.size)), 0);
+        let addr = ((hi as GuestPhysAddr) << 32) + (lo as GuestPhysAddr);
+        if write_x86_mem(cpu, addr, &window).is_err() {
+            log::debug!("session: x86 buffer write failed at {addr:#x}");
+        }
+        write_mailbox_value(cpu, MailboxValues { mbox: word, ptr_lower: lo, ptr_higher: hi })
+            .expect("Failed to write to mailbox");
+        qemu.flush_jit();
+    }
+
     /// (byte offset of the mailbox command word in the input, size of the argument buffer, pointers in input)
     #[must_use]
     pub fn mailbox_layout(&self) -> Option<(usize, usize, bool)> {
