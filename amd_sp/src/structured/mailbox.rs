@@ -457,15 +457,21 @@ impl<S: HasRand> Mutator<MbSession, S> for SequenceMutator {
             return Ok(MutationResult::Skipped);
         }
         match below(state, 6) {
-            // replace the session by a prefix of a valid sequence
+            // prepend the missing prerequisites of a valid sequence prefix, keeping the rest of the session
             0 if !self.valid.is_empty() => {
                 let seq = &self.valid[below(state, self.valid.len())];
                 let take = 1 + below(state, seq.len());
-                let ids: Vec<u32> = seq[..take].to_vec();
-                let parts: Vec<MbMsg> = ids
+                let have: Vec<u32> = input.parts().iter().map(|m| m.cmd).collect();
+                let mut parts: Vec<MbMsg> = seq[..take]
                     .iter()
+                    .filter(|i| !have.contains(i))
                     .map(|&i| new_msg(state, &self.catalog, i))
                     .collect();
+                if parts.is_empty() {
+                    return Ok(MutationResult::Skipped);
+                }
+                parts.extend(input.parts().iter().cloned());
+                parts.truncate(self.max_len);
                 *input = MbSession::new(parts);
             }
             1 if n > 1 => input.remove_part_at_index(below(state, n)),
