@@ -27,3 +27,7 @@ clean:
 # Debug the fuzzer with lldb
 debug *ARGS: build
     RUST_LOG=debug rust-lldb target/release/aspfuzz -- {{ARGS}}
+
+# Safety net: gate A and B, 5 runs each on the current build; fails if any run misses
+verify: build
+    regression-gate/verify.sh
