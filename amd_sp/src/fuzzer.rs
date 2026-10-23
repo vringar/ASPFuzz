@@ -251,7 +251,7 @@ pub fn fuzz() -> Result<(), Error> {
         let mut harness = |emulator: &mut Emulator<_, _, _, _, _, MyState, _>,
                            state: &mut MyState,
                            input: &BytesInput| {
-            log::error!("Starting harness");
+            log::debug!("Starting harness");
             let dr_cov_module = emulator
                 .modules_mut()
                 .get_mut::<DrCovModule<StdAddressFilter>>()
@@ -267,7 +267,7 @@ pub fn fuzz() -> Result<(), Error> {
             } else {
                 0
             };
-            log::error!("Starting QEMU");
+            log::debug!("Starting QEMU");
             unsafe {
                 let res = emulator.qemu().run();
                 // TODO: Figure out how do do this in an observer
@@ -315,7 +315,7 @@ pub fn fuzz() -> Result<(), Error> {
                     log::error!("Unexpected exit at PC: {pc:#x}");
                     ExitKind::Crash
                 };
-                log::error!("Harness done with exit code {ret:?}");
+                log::debug!("Harness done with exit code {ret:?}");
                 // OPTION 1: restore only the CPU state (registers et. al)
                 // for (i, s) in saved_cpu_states.iter().enumerate() {
                 //     emu.cpu_from_index(i).restore_state(s);
