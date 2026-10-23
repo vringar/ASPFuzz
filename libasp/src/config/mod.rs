@@ -60,25 +60,6 @@ impl ZenVersion {
             ZenVersion::ZenTesla => "amd-psp-zentesla",
         }
     }
-    /// This function returns a list of possible addresses that jumps into the on-chip BL
-    /// This could be used in future work to update the `ExceptionHandler` address
-    #[must_use]
-    pub fn get_last_off_chip_bl_instruction(&self) -> Vec<GuestAddr> {
-        match self {
-            ZenVersion::Zen2 => vec![0xffff24f8],
-            _ => todo!(),
-        }
-    }
-
-    /// This function returns a list of possible addresses that jumps into the on-chip BL
-    /// This could be used in future work to update the `ExceptionHandler` address
-    #[must_use]
-    pub fn get_last_on_chip_bl_instruction(&self) -> Vec<GuestAddr> {
-        match self {
-            ZenVersion::Zen2 => vec![0x450],
-            _ => todo!(),
-        }
-    }
 }
 
 #[derive(Clone, Deserialize, Debug)]

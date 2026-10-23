@@ -11,7 +11,6 @@ pub use gen_metadata::*;
 
 // Resetting the state aka. snapshotting in between fuzzing test-cases
 pub mod reset_state;
-use libafl_qemu::GuestAddr;
 pub use reset_state::*;
 
 pub mod emulator_module;
@@ -21,22 +20,3 @@ pub mod bindings;
 pub mod mailbox_dict;
 pub mod config;
 pub use bindings::*;
-
-#[derive(Debug, Clone, Default)]
-pub enum BootStage {
-    #[default]
-    OnChipBootloader,
-    OffChipBootloader,
-    TrustedOS,
-}
-
-impl BootStage {
-    #[must_use]
-    pub fn get_exception_vector_base(&self) -> GuestAddr {
-        match self {
-            BootStage::OnChipBootloader => 0x100,
-            BootStage::OffChipBootloader => 0x100,
-            BootStage::TrustedOS => 0x0,
-        }
-    }
-}
