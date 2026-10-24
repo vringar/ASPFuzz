@@ -161,7 +161,7 @@ fn exec_block_hook<ET, I, S>(
         .modules()
         .match_first_type()
         .expect("This should only run with a FlashHookConfig");
-    if !module.r.ccp_memcopy_id == id {
+    if module.r.ccp_memcopy_id != id {
         log::debug!("Execute block: id: {id}");
         // log::debug!("> data: {}", (todo!() as u32));
         qemu.current_cpu().unwrap().trigger_breakpoint();
