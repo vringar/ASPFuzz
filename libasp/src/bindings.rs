@@ -15,6 +15,7 @@ extern "C" {
     fn aspfuzz_write_smn_flash(addr: hwaddr, len: hwaddr, buf: *const u8) -> i32;
     fn aspfuzz_x86_write(addr: hwaddr, buf: *mut u8, len: hwaddr) -> i32;
     fn aspfuzz_x86_read(addr: hwaddr, buf: *mut u8, len: hwaddr) -> i32;
+    fn aspfuzz_mailbox_write(word: u32, value: u32) -> i32;
     fn aspfuzz_access_observer_activate(addr: hwaddr, size: hwaddr) -> i32;
     fn aspfuzz_access_observer_reset() -> i32;
     fn aspfuzz_irq_inject(id: u32) -> i32;
@@ -93,14 +94,15 @@ pub fn read_x86_mem(
 
 const MAILBOX_BASE_ADDR: GuestAddr = 0x03010570;
 
-/// Provide the CPU as proof that QEMU has been initialized and is halted
-pub fn write_mailbox_value(cpu: &CPU, values: MailboxValues) -> Result<(), Error> {
-    cpu.write_mem(MAILBOX_BASE_ADDR, &values.mbox.to_le_bytes())
-        .map_err(QemuError::RW)?;
-    cpu.write_mem(MAILBOX_BASE_ADDR + 4, &values.ptr_lower.to_le_bytes())
-        .map_err(QemuError::RW)?;
-    cpu.write_mem(MAILBOX_BASE_ADDR + 8, &values.ptr_higher.to_le_bytes())
-        .map_err(QemuError::RW)?;
+/// Writes the three mailbox words through the emulator's normal write path, so the doorbell logic sees an
+/// external write. Provide the CPU as proof that QEMU has been initialized and is halted
+pub fn write_mailbox_value(_cpu: &CPU, values: MailboxValues) -> Result<(), Error> {
+    for (word, value) in [values.mbox, values.ptr_lower, values.ptr_higher].into_iter().enumerate() {
+        // SAFETY: plain by-value call; the C side returns -1 if no mailbox is realized
+        if unsafe { aspfuzz_mailbox_write(word as u32, value) } != 0 {
+            return Err(Error::illegal_state("Failed to write the mailbox word"));
+        }
+    }
     Ok(())
 }
 

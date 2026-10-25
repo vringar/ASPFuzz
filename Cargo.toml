@@ -6,17 +6,17 @@ members = [
 resolver = "2"
 
 [workspace.dependencies]
-libafl = { git = "https://github.com/PSPReverse/LibAFL", rev = "586f8294f629030221568f542bc85c95159fd917",default-features = false, features = [
+libafl = { git = "https://github.com/PSPReverse/LibAFL", rev = "8ccff452b06052eebf4d23feeeb836723592472c",default-features = false, features = [
     "prelude",
     "fork"
 ] }
-libafl_bolts = {  git = "https://github.com/PSPReverse/LibAFL", rev = "586f8294f629030221568f542bc85c95159fd917", features = ["errors_backtrace", "stable_anymap"]}
-libafl_qemu = {  git = "https://github.com/PSPReverse/LibAFL", rev = "586f8294f629030221568f542bc85c95159fd917", features = [
+libafl_bolts = {  git = "https://github.com/PSPReverse/LibAFL", rev = "8ccff452b06052eebf4d23feeeb836723592472c", features = ["errors_backtrace", "stable_anymap"]}
+libafl_qemu = {  git = "https://github.com/PSPReverse/LibAFL", rev = "8ccff452b06052eebf4d23feeeb836723592472c", features = [
     "arm",
     "systemmode",
 ], default-features = false }
 
-libafl_targets = {  git = "https://github.com/PSPReverse/LibAFL", rev = "586f8294f629030221568f542bc85c95159fd917" }
+libafl_targets = {  git = "https://github.com/PSPReverse/LibAFL", rev = "8ccff452b06052eebf4d23feeeb836723592472c" }
 
 [profile.dev]
 debug = true
